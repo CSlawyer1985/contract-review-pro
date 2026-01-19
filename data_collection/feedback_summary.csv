@@ -1,0 +1,3 @@
+timestamp,contract_type,review_depth,total_risks,fatal_risks,important_risks,risk_accuracy,suggestion_helpful
+2026-01-19T13:35:22.433183,对赌协议,快速审核,0,0,0,4,True
+2026-01-19T13:36:15.875827,对赌协议,快速审核,0,0,0,5,True

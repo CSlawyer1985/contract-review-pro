@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-01-19T13:36:15.875827",
+  "contract_name": "测试",
+  "contract_type": "对赌协议",
+  "review_depth": "快速审核",
+  "total_risks": 0,
+  "risk_breakdown": {},
+  "feedback": {
+    "risk_accuracy": 5,
+    "suggestion_helpful": true,
+    "suggested_improvements": "",
+    "risks_corrected": [],
+    "additional_risks": []
+  }
+}
