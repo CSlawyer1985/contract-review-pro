@@ -2,7 +2,7 @@
 
 > **专业合同审核AI系统** - 融合三观四步法方法论与智能风险评估
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/your-repo/contract-review-pro)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/your-repo/contract-review-pro)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Code](https://img.shields.io/badge/code--2700lines-brightgreen.svg)]()
@@ -21,6 +21,11 @@
 - 🧠 **智能风险评分** - 多维度综合评分(0-100),量化合同风险
 - 🚀 **三种审核模式** - 快速(5-10分钟)、标准(30-60分钟)、深度(1-2小时)
 - 📝 **专业意见书** - 自动生成符合律师标准的法律审核意见书
+- 🆕 **V2.0新特性**：
+  - ✅ **智能输出目录** - 默认使用当前工作目录，支持自定义
+  - ✅ **详细批注版** - 完整保留原合同，逐条添加风险批注
+  - ✅ **批注汇总表** - 快速定位所有问题点
+  - ✅ **风险可视化** - 🔴致命 🟠重要 🟡一般 🔵轻微 四级标注
 
 ---
 
@@ -139,6 +144,78 @@ for dim, score in scoring['dimension_scores'].items():
     print(f"  {dim}: {score}")
 
 print(f"\n深度意见书: {opinion_file}")
+```
+
+---
+
+## 🆕 V2.0 新特性详解
+
+### 1. 智能输出目录
+
+**V1.0问题：** 文件固定生成在skill目录，不方便查看
+
+**V2.0解决方案：**
+```python
+from main import ContractReviewPro
+
+# 默认使用当前工作目录
+system = ContractReviewPro()
+# 输出: /Users/CS/Trae/Claude/
+
+# 或自定义输出目录
+system = ContractReviewPro(output_dir="/custom/path")
+```
+
+### 2. 详细批注版合同
+
+**V1.0问题：** 批注版过于简单，仅显示原合同
+
+**V2.0优化：**
+- ✅ 完整保留原合同内容
+- ✅ 逐条添加风险批注
+- ✅ 批注汇总表（所有问题一览）
+- ✅ 风险等级可视化（🔴🟠🟡🔵）
+- ✅ 每个批注包含：问题描述、法律依据、修改建议
+
+**批注版示例：**
+```markdown
+## 📊 批注汇总表
+
+| 批注编号 | 风险等级 | 问题摘要 | 位置 |
+|---------|---------|---------|------|
+| 批注1 | 🔴 致命风险 | 服务期限空白 | 第三条第1款 |
+| 批注2 | 🟠 重要风险 | 收款账户空白 | 第二条第4款 |
+
+### 🔴 必须修改（P0级）
+
+1. **服务期限空白** → 填写"2026年1月1日至2026年12月31日"
+```
+
+### 3. 使用方法
+
+**在Claude Code中直接使用：**
+```
+"详细审核 @合同文件.docx"
+```
+
+**Python代码调用：**
+```python
+from main import quick_review
+
+result = quick_review(
+    contract_text="合同文本...",
+    contract_name="测试合同",
+    user_context={
+        'party': '乙方',
+        'position': '平等',
+        'history': '首次合作',
+        'focus': '律师义务'
+    }
+)
+
+# 文件自动生成在当前目录
+print(result['opinion_file'])    # 法律审核意见书
+print(result['annotated_file'])  # 详细批注版
 ```
 
 ---

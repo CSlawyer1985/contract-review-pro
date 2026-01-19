@@ -1,6 +1,9 @@
 """
-文档生成模块
-生成法律审核意见书和批注版合同
+文档生成模块 (优化版 V2.0)
+优化内容：
+1. 批注版合同更加详细
+2. 支持完整的批注和风险标注
+3. 改进格式和可读性
 """
 
 from pathlib import Path
@@ -9,187 +12,314 @@ from datetime import datetime
 
 
 class DocumentGenerator:
-    """文档生成器"""
+    """文档生成器 (优化版)"""
 
     def __init__(self, output_dir: str):
-        """
-        初始化文档生成器
-
-        Args:
-            output_dir: 输出目录路径
-        """
+        """初始化文档生成器"""
         self.output_dir = Path(output_dir)
-        self.opinions_dir = self.output_dir / 'opinions'
-        self.annotated_dir = self.output_dir / 'annotated_contracts'
-
-        # 创建输出目录
-        self.opinions_dir.mkdir(parents=True, exist_ok=True)
-        self.annotated_dir.mkdir(parents=True, exist_ok=True)
+        print(f"📄 文档输出目录: {self.output_dir}")
+        
+        # 不创建子目录，直接输出到指定目录
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def generate_legal_opinion(self, contract_name: str, analysis_result: Dict,
                               risk_report: Dict, user_context: Dict) -> str:
-        """
-        生成法律审核意见书（Markdown格式）
-
-        Args:
-            contract_name: 合同名称
-            analysis_result: 合同分析结果
-            risk_report: 风险报告
-            user_context: 用户上下文信息
-
-        Returns:
-            生成的文件路径
-        """
+        """生成法律审核意见书"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{contract_name}_法律审核意见书_{timestamp}.md"
-        filepath = self.opinions_dir / filename
+        filename = f"{contract_name}-法律审核意见书.md"
+        filepath = self.output_dir / filename
 
-        # 生成 Markdown 内容
         content = self._generate_opinion_content(
             contract_name, analysis_result, risk_report, user_context
         )
 
-        # 写入文件
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
 
+        print(f"✅ 法律审核意见书已生成: {filepath}")
         return str(filepath)
 
     def _generate_opinion_content(self, contract_name: str, analysis_result: Dict,
                                  risk_report: Dict, user_context: Dict) -> str:
-        """生成意见书内容"""
-        content = f"""# {contract_name} 法律审核意见书
+        """生成意见书内容 (详细版)"""
+        content = f"""# {contract_name} - 法律审核意见书
+
+**文件名称：** {contract_name}  
+**审核日期：** {datetime.now().strftime('%Y年%m月%d日')}  
+**审核律师：** Contract Review Pro v2.0  
+**合同类型：** {analysis_result.get('identified_type', '未知')}
 
 ---
 
-## 一、合同基本信息
+## 📋 一、委托方确认信息
 
-- **合同类型**: {analysis_result.get('identified_type', '未知')}
-- **识别置信度**: {analysis_result.get('type_confidence', 0):.2%}
-- **审核时间**: {datetime.now().strftime('%Y年%m月%d日')}
-
----
-
-## 二、用户确认信息
-
-- **代表方**: {user_context.get('party', '未指定')}
-- **市场地位**: {user_context.get('position', '未指定')}
-- **过往交易**: {user_context.get('history', '无')}
-- **关注点**: {user_context.get('focus', '未指定')}
+| 项目 | 内容 |
+|------|------|
+| **委托方身份** | {user_context.get('party', '未指定')} |
+| **市场地位** | {user_context.get('position', '未指定')} |
+| **合作背景** | {user_context.get('history', '首次合作')} |
+| **重点关切** | {user_context.get('focus', '无')} |
+| **审核深度** | {user_context.get('review_depth', '标准审核')} |
 
 ---
 
-## 三、审核配置
-
-- **审核深度**: {user_context.get('review_depth', '标准审核')}
-- **审核范围**: {user_context.get('review_scope', '主要条款')}
-- **风险等级**: {', '.join(user_context.get('risk_levels', ['致命', '重要', '一般']))}
-
----
-
-## 四、风险汇总
+## 📊 二、风险汇总统计
 
 """
 
-        # 风险汇总
+        # 风险汇总表格
         summary = risk_report.get('summary', {})
-        content += "| 风险等级 | 数量 |\n"
-        content += "|---------|------|\n"
-        for level, count in summary.items():
-            content += f"| {level} | {count} |\n"
-        content += f"| **合计** | **{risk_report.get('total_risks', 0)}** |\n\n"
+        total_risks = sum(summary.values())
+        
+        content += "| 风险等级 | 数量 | 占比 |\n"
+        content += "|---------|------|------|\n"
+        
+        for level in ['致命风险', '重要风险', '一般风险', '轻微瑕疵']:
+            count = summary.get(level, 0)
+            percentage = f"{count/total_risks*100:.0f}%" if total_risks > 0 else "0%"
+            emoji = "🔴" if level == "致命风险" else "🟠" if level == "重要风险" else "🟡" if level == "一般风险" else "🔵"
+            content += f"| {emoji} {level} | {count} | {percentage} |\n"
+        
+        content += f"| **合计** | **{total_risks}** | **100%** |\n\n"
 
-        # 按风险等级详细列出
-        content += "## 五、详细审核意见\n\n"
-
+        # 详细审核意见
+        content += "## ⚠️ 三、详细审核意见\n\n"
+        
         risks_by_level = risk_report.get('risks_by_level', {})
-
+        
         for level in ['致命风险', '重要风险', '一般风险', '轻微瑕疵']:
             risks = risks_by_level.get(level, [])
             if not risks:
                 continue
-
-            content += f"### {level}（{len(risks)}项）\n\n"
-
+            
+            emoji = "🔴" if level == "致命风险" else "🟠" if level == "重要风险" else "🟡" if level == "一般风险" else "🔵"
+            content += f"### {emoji} {level}（{len(risks)}项）\n\n"
+            
             for i, risk in enumerate(risks, 1):
-                content += f"#### {i}. {risk['description']}\n\n"
-                content += f"- **风险等级**: {risk['risk_type']}\n"
-                content += f"- **法律依据**: {risk['legal_basis']}\n"
-                content += f"- **修改建议**: {risk['suggestion']}\n"
-                content += f"- **影响分析**: {risk['impact']}\n\n"
-
-        # 条款审核结果
-        clauses = analysis_result.get('clauses', {})
-        if clauses:
-            content += "## 六、条款审核结果\n\n"
-            for clause_type, clause_list in clauses.items():
-                content += f"### {clause_type}（{len(clause_list)}条）\n\n"
-                for clause in clause_list[:3]:  # 只显示前3条
-                    content += f"**{clause['number']}**: {clause['content'][:100]}...\n\n"
+                content += f"#### 风险{i}：{risk['description']}\n\n"
+                content += f"**位置：** {risk.get('location', '未知')}\n\n"
+                content += f"**风险等级：** {level} {'⭐' * (5 if level=='致命风险' else 4 if level=='重要风险' else 3 if level=='一般风险' else 2)}\n\n"
+                content += f"**原文：**\n> {risk.get('original_text', '无')}\n\n"
+                content += f"**问题分析：**\n{risk.get('analysis', '无')}\n\n"
+                content += f"**法律依据：**\n{risk.get('legal_basis', '无')}\n\n"
+                content += f"**修改建议：**\n```\n{risk.get('suggestion', '无')}\n```\n\n"
+                content += "---\n\n"
 
         # 总体建议
-        content += """---
+        content += """## 📝 四、总体建议
 
-## 七、总体建议
+### （一）必须修改的内容（签约前完成）
 
-1. **优先处理**: 建议优先修改"致命风险"和"重要风险"相关条款
-2. **风险对冲**: 对于无法修改的风险，建议通过其他措施进行对冲（如担保、保险）
-3. **后续跟进**: 建议在合同履行过程中密切关注已识别的风险点
+"""
+        
+        fatal_risks = risks_by_level.get('致命风险', [])
+        important_risks = risks_by_level.get('重要风险', [])
+        
+        if fatal_risks or important_risks:
+            for i, risk in enumerate(fatal_risks + important_risks, 1):
+                content += f"{i}. ✅ **{risk['description']}** - {risk.get('location', '未知')}\n"
+        else:
+            content += "无\n"
+        
+        content += "\n### （二）建议修改的内容\n\n"
+        
+        general_risks = risks_by_level.get('一般风险', [])
+        if general_risks:
+            for i, risk in enumerate(general_risks[:5], 1):
+                content += f"{i}. 🔄 **{risk['description']}**\n"
+        else:
+            content += "无\n"
+
+        content += f"""
+---
+
+## ⚖️ 五、法律风险评估
+
+**整体风险等级：** {'高风险' if summary.get('致命风险', 0) > 0 else '中等风险' if summary.get('重要风险', 0) > 2 else '低风险'}
+
+**关键风险点：**
+"""
+        
+        if fatal_risks:
+            content += "\n1. ⚠️ " + fatal_risks[0]['description'] + "\n"
+        
+        content += f"""
 
 ---
 
-*本意见书由 AI 辅助生成，仅供参考，具体请以专业律师意见为准。*
+## 📚 六、法律依据索引
 
-生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+1. **《中华人民共和国民法典》** - 合同编
+2. **《中华人民共和国律师法》**
+3. **相关司法解释和行业规范**
+
+---
+
+**审核律师：** Contract Review Pro v2.0  
+**审核日期：** {datetime.now().strftime('%Y年%m月%d日')}  
+
+---
+
+## ⚠️ 免责声明
+
+本法律审核意见书由AI系统基于预设规则生成，仅供参考，不构成正式法律意见。
+
+对于重大、复杂的交易，建议咨询专业律师。
+
+最终修改决策权由委托方根据实际情况自行判断。
+
+---
+
+**© 2026 Contract Review Pro - 专业合同审核系统**
 """
-
+        
         return content
 
-    def generate_annotated_contract(self, contract_name: str, original_contract: str,
-                                   revisions: List[Dict]) -> str:
+    def generate_detailed_annotated_contract(self, contract_name: str, original_contract: str,
+                                            analysis_result: Dict, risk_report: Dict,
+                                            user_context: Dict) -> str:
         """
-        生成批注版合同（简化的Markdown格式）
-
-        注意：完整版需要使用 python-docx 生成 Word 文档
-
-        Args:
-            contract_name: 合同名称
-            original_contract: 原合同文本
-            revisions: 修订列表
-
-        Returns:
-            生成的文件路径
+        生成详细批注版合同 (新增功能)
+        
+        优化点：
+        1. 完整保留原合同内容
+        2. 逐条添加批注
+        3. 标注风险点和修改建议
         """
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{contract_name}_批注版_{timestamp}.md"
-        filepath = self.annotated_dir / filename
+        filename = f"{contract_name}-批注版.md"
+        filepath = self.output_dir / filename
 
-        # 生成带批注的内容
-        content = f"# {contract_name}（批注版）\n\n"
-        content += "## 批注说明\n\n"
-        content += "- ~~删除线~~ 表示删除的内容\n"
-        content += "- **下划线** 或红色文字表示新增的内容\n"
-        content += "- [批注] 表示审核意见和修改建议\n\n"
-        content += "---\n\n"
+        content = f"""# {contract_name} - 批注版
 
-        # 添加原合同内容（简化版，实际应该逐行处理并添加修订标记）
-        content += "## 合同正文\n\n"
-        content += original_contract
+**审核日期：** {datetime.now().strftime('%Y年%m月%d日')}  
+**审核重点：** 全面审核  
+**风险等级标识：**
+- 🔴 致命风险（必须修改）
+- 🟠 重要风险（建议修改）
+- 🟡 一般风险（可协商修改）
+- 🔵 轻微瑕疵（可选修改）
 
-        # 添加修订汇总
-        if revisions:
-            content += "\n\n---\n\n"
-            content += "## 修订汇总\n\n"
-            for i, revision in enumerate(revisions, 1):
-                content += f"### 修订 {i}\n\n"
-                content += f"- **位置**: {revision.get('location', '未知')}\n"
-                content += f"- **风险等级**: {revision.get('risk_level', '未知')}\n"
-                content += f"- **原内容**: {revision.get('original', '未知')}\n"
-                content += f"- **建议修改**: {revision.get('suggested', '未知')}\n"
-                content += f"- **修改理由**: {revision.get('reason', '未知')}\n\n"
+---
 
-        # 写入文件
+## 📊 批注汇总表
+
+| 批注编号 | 风险等级 | 问题摘要 | 位置 |
+|---------|---------|---------|------|
+"""
+
+        # 生成批注汇总表
+        risks_by_level = risk_report.get('risks_by_level', {})
+        annotation_num = 1
+        
+        for level in ['致命风险', '重要风险', '一般风险', '轻微瑕疵']:
+            risks = risks_by_level.get(level, [])
+            emoji = "🔴" if level == "致命风险" else "🟠" if level == "重要风险" else "🟡" if level == "一般风险" else "🔵"
+            for risk in risks:
+                content += f"| 批注{annotation_num} | {emoji} {level} | {risk['description'][:30]}... | {risk.get('location', '未知')} |\n"
+                annotation_num += 1
+        
+        total_annotations = annotation_num - 1
+        content += f"\n**统计：**\n"
+        content += f"- 🔴 致命风险：{risks_by_level.get('致命风险', [])|length}项\n"
+        content += f"- 🟠 重要风险：{risks_by_level.get('重要风险', [])|length}项\n"
+        content += f"- 🟡 一般风险：{risks_by_level.get('一般风险', [])|length}项\n"
+        content += f"- 🔵 轻微瑕疵：{risks_by_level.get('轻微瑕疵', [])|length}项\n"
+        content += f"- **合计：{total_annotations}项**\n\n"
+
+        content += """---
+
+## ⚠️ 核心问题快速定位
+
+### 🔴 必须修改（P0级）- 致命风险
+
+"""
+        
+        fatal_risks = risks_by_level.get('致命风险', [])
+        if fatal_risks:
+            for i, risk in enumerate(fatal_risks, 1):
+                content += f"{i}. **{risk['description']}** → {risk.get('suggestion', '无')}\n\n"
+        else:
+            content += "无致命风险\n\n"
+        
+        content += "### 🟠 强烈建议修改（P1级）- 重要风险\n\n"
+        
+        important_risks = risks_by_level.get('重要风险', [])
+        if important_risks:
+            for i, risk in enumerate(important_risks[:5], 1):
+                content += f"{i}. **{risk['description']}** → {risk.get('suggestion', '无')[:50]}...\n\n"
+        else:
+            content += "无重要风险\n\n"
+
+        content += """---
+
+## 📝 详细批注内容
+
+### 【合同标题】
+
+**""" + contract_name + """**
+
+✅ **条款评价：** 合同标题明确
+
+---
+
+### 【合同正文】
+
+"""
+        
+        # 添加原合同内容并添加批注
+        lines = original_contract.split('\n')
+        annotation_num = 1
+        
+        for line in lines:
+            if not line.strip():
+                content += "\n"
+                continue
+            
+            # 检查这一行是否涉及风险
+            line_has_annotation = False
+            for level in ['致命风险', '重要风险', '一般风险', '轻微瑕疵']:
+                risks = risks_by_level.get(level, [])
+                for risk in risks:
+                    if risk.get('original_text', '') in line or risk.get('location', '') in line:
+                        emoji = "🔴" if level == "致命风险" else "🟠" if level == "重要风险" else "🟡" if level == "一般风险" else "🔵"
+                        content += f"\n{line}\n\n"
+                        content += f"{emoji} **[批注{annotation_num}] {risk['description']}** "
+                        content += f"{'⭐' * (5 if level=='致命风险' else 4 if level=='重要风险' else 3 if level=='一般风险' else 2)}\n\n"
+                        content += f"> **问题：** {risk.get('analysis', '无')}\n\n"
+                        content += f"> **修改建议：**\n> ```\n> {risk.get('suggestion', '无')}\n> ```\n\n"
+                        content += "---\n\n"
+                        annotation_num += 1
+                        line_has_annotation = True
+                        break
+                if line_has_annotation:
+                    break
+            
+            if not line_has_annotation:
+                content += line + "\n"
+
+        content += f"""
+---
+
+**审核律师：** Contract Review Pro v2.0  
+**审核日期：** {datetime.now().strftime('%Y年%m月%d日')}  
+**文件版本：** 批注版 v2.0（详细版）
+
+---
+
+**使用说明：**
+1. 本批注版共标注 **{total_annotations}** 个问题点，按风险等级分为四级
+2. 建议优先处理 🔴致命风险、🟠重要风险
+3. 每个批注包含：问题描述、风险分析、法律依据、修改建议
+4. 修改建议可直接用于合同修订谈判
+
+---
+
+**© 2026 Contract Review Pro - 专业合同审核系统**
+"""
+
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
 
+        print(f"✅ 批注版合同已生成: {filepath}")
         return str(filepath)
