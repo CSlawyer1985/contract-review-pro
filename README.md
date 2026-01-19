@@ -1,4 +1,4 @@
-# Contract Review Pro 🏛️
+# Contract Review Pro V2.0 🏛️
 
 > **专业合同审核AI系统** - 融合三观四步法方法论与智能风险评估
 
