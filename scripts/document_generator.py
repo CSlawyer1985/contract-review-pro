@@ -1,13 +1,14 @@
 """
-文档生成模块 (优化版 V2.0)
+文档生成模块 (优化版 V2.1)
 优化内容：
 1. 批注版合同更加详细
 2. 支持完整的批注和风险标注
 3. 改进格式和可读性
+4. 支持 Word Track Changes 修订版 .docx 输出
 """
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime
 
 
@@ -323,3 +324,46 @@ class DocumentGenerator:
 
         print(f"✅ 批注版合同已生成: {filepath}")
         return str(filepath)
+
+    def generate_tracked_changes_docx(
+        self,
+        contract_name: str,
+        original_docx_path: str,
+        risk_report: Dict,
+        author: str = "陈石律师",
+        initials: str = "CS",
+    ) -> Optional[str]:
+        """生成带 Word 修订模式（Track Changes）和批注的 .docx 文件。
+
+        Args:
+            contract_name: 合同名称（用于生成文件名）
+            original_docx_path: 原始 Word 文件路径
+            risk_report: 审核结果报告（含 risks_by_level 等）
+            author: 批注人名称（显示在 Word 审阅窗格中）
+            initials: 批注人缩写
+
+        Returns:
+            生成的 .docx 文件路径，失败返回 None
+        """
+        try:
+            from .docx_generator import DocxTrackChangesGenerator
+
+            generator = DocxTrackChangesGenerator(
+                original_docx_path=original_docx_path,
+                risk_report=risk_report,
+                output_dir=str(self.output_dir),
+                author=author,
+                initials=initials,
+            )
+            result = generator.generate(contract_name)
+            if result:
+                print(f"✅ Word 修订版已生成: {result}")
+            else:
+                print("⚠️ Word 修订版生成失败，已跳过")
+            return result
+        except ImportError:
+            print("⚠️ docx skill 未安装，跳过 Word 修订版生成")
+            return None
+        except Exception as e:
+            print(f"⚠️ Word 修订版生成失败: {e}")
+            return None

@@ -5,11 +5,11 @@
 **专业合同审核 AI 系统 - 融合三观四步法方法论与智能风险评估**
 
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/CSlawyer1985/contract-review-pro)
+[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](https://github.com/CSlawyer1985/contract-review-pro)
 [![Author](https://img.shields.io/badge/author-陈石(CS)-orange.svg)](https://github.com/CSlawyer1985)
 [![Claude](https://img.shields.io/badge/Claude-Skill-purple.svg)](https://claude.ai/)
 
-三观四步法方法论 | 智能风险评估 | 30种合同类型 | 123个风险点模板
+三观四步法方法论 | 智能风险评估 | 30种合同类型 | 123个风险点模板 | Word Track Changes
 
 [快速开始](#-快速开始) • [核心功能](#-核心功能) • [使用指南](#-使用指南) • [FAQ](#常见问题)
 
@@ -36,7 +36,7 @@
 - **🗂️ 风险点模板**：123个精准风险点模板
 - **📋 审查清单**：53项宏观/中观/微观检查清单
 - **🛠️ 标准条款**：18类标准条款模板
-- **✅ 代码规模**：约2,700行核心代码
+- **✅ 代码规模**：约3,000行核心代码
 - **🎯 审核模式**：三种审核深度（快速/标准/深度）
 
 ---
@@ -69,6 +69,7 @@
 - **智能风险评分**：多维度综合评分（0-100）
 - **详细批注版合同**：完整保留原合同，逐条添加风险批注
 - **批注汇总表**：快速定位所有问题点
+- **Word 修订版输出**：自动生成带 Track Changes（修订标记）和 Comments（批注）的 .docx 文件，可在 Word 中直接接受/拒绝修订，支持自定义批注人名称
 
 ### �� 创新性
 
@@ -198,6 +199,7 @@ print(f"法律意见书: {result['opinion_file']}")
 - 📋 发现的风险点数量和等级
 - ✅ 法律审核意见书（自动生成）
 - 📝 详细批注版合同
+- 📄 Word 修订版合同（.docx，带 Track Changes + Comments）
 
 ### 使用方式二：深度审核
 
@@ -251,6 +253,7 @@ contract-review-pro/
 │   ├── risk_assessment.py              # 风险评估器（127行）
 │   ├── clause_review.py                # 条款审核器（93行）
 │   ├── document_generator.py           # 文档生成器（195行）
+│   ├── docx_generator.py               # Word Track Changes 生成器（269行）
 │   ├── sanguan_analysis.py            # 三观四步法分析（500行）
 │   └── intelligent_scoring.py          # 智能评分系统（355行）
 │
@@ -265,7 +268,7 @@ contract-review-pro/
     └── annotated_contracts/            # 批注版合同
 
 **代码统计**：
-- 核心代码：约2,700行（7个主要模块）
+- 核心代码：约3,000行（8个主要模块）
 - 数据记录：30种合同类型 + 123个风险点 + 18类标准条款 + 53项检查清单
 ```
 
@@ -441,6 +444,13 @@ result, opinion_file = advanced_review(
 - ✅ 详细批注版合同（完整保留原合同，逐条添加风险批注）
 - ✅ 批注汇总表（快速定位所有问题点）
 - ✅ 风险可视化（🔴致命 🟠重要 🟡一般 🔵轻微 四级标注）
+
+### v2.1 - 2026年4月
+
+- ✅ Word Track Changes 修订版输出（.docx 格式，支持接受/拒绝修订）
+- ✅ Word Comments 批注（风险等级 + 分析 + 法律依据）
+- ✅ 自定义批注人名称（默认"陈石律师"，可自定义）
+- ✅ 基于 OOXML 原生修订标记，保留原始格式
 
 ### v1.2（历史版本）- 2025年1月
 
@@ -659,9 +669,9 @@ git push origin feature/你的功能名
 
 ## 📦 版本信息
 
-- **版本号**：v2.0.0
+- **版本号**：v2.1.0
 - **创建日期**：2026年1月24日
-- **最后更新**：2026年1月24日
+- **最后更新**：2026年4月27日
 - **数据来源**：专业法律著作
 - **适用范围**：中国大陆民商事合同
 - **开发者**：陈石（CS）
