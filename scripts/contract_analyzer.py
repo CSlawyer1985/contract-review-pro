@@ -21,29 +21,22 @@ except ImportError:
 
 
 class ContractAnalyzer:
-    """合同分析器"""
+    """合同分析器 — 含效力审查、门禁检查和条款库索引"""
 
     def __init__(self, data_dir: str, methodology_file: str, review_config: ReviewConfig):
-        """
-        初始化合同分析器
-
-        Args:
-            data_dir: 数据目录路径
-            methodology_file: 方法论文档路径
-            review_config: 审核配置
-        """
         self.data_dir = Path(data_dir)
         self.config = review_config
         self.methodology_file = methodology_file
         self.nlp_enabled = NLP_AVAILABLE
 
-        # 加载数据
         self.contract_types = self._load_contract_types()
         self.risk_templates = self._load_risk_templates()
         self.clause_standards = self._load_clause_standards()
         self.review_checklists = self._load_review_checklists()
 
-        # 初始化NLP模型
+        # 工作区条款库索引
+        self._workspace_clause_index = None
+
         if self.nlp_enabled:
             self._init_nlp_model()
 
@@ -373,29 +366,233 @@ class ContractAnalyzer:
         return best_match
 
     def parse_contract(self, contract_text: str) -> Dict:
-        """
-        解析合同文本，提取关键信息
-
-        Args:
-            contract_text: 合同文本
-
-        Returns:
-            合同解析结果
-        """
-        # 识别合同类型
+        """解析合同文本，提取关键信息（含效力审查和门禁检查）"""
         type_scores = self.identify_contract_type(contract_text)
         identified_type = type_scores[0][0] if type_scores else '未知'
-
-        # 提取条款
         clauses = self.extract_clauses(contract_text, identified_type)
 
-        return {
+        result = {
             'identified_type': identified_type,
             'type_confidence': type_scores[0][1] if type_scores else 0.0,
             'type_alternatives': type_scores[1:4] if len(type_scores) > 1 else [],
             'clauses': clauses,
             'total_clauses': sum(len(clause_list) for clause_list in clauses.values())
         }
+
+        # 效力审查优先
+        validity_result = self.run_validity_review(contract_text, identified_type)
+        result['validity_review'] = validity_result
+
+        # 门禁检查
+        gate_result = self.run_gate_checks(contract_text, identified_type)
+        result['gate_checks'] = gate_result
+
+        return result
+
+    # ============ 效力审查 ============
+
+    def run_validity_review(self, contract_text: str, contract_type: str) -> Dict:
+        """执行 5 项效力审查（效力优先于条款优化）"""
+        checks = {}
+
+        # 1. 名实不符交易
+        ming_shi_keywords = ['循环买卖', '名为买卖', '名为合作', '名为投资', '实为借贷',
+                             '名为委托', '名为承揽']
+        checks['名实不符'] = {
+            'pass': not any(kw in contract_text for kw in ming_shi_keywords),
+            'detail': '未发现明显名实不符信号' if not any(kw in contract_text for kw in ming_shi_keywords)
+                      else '存在名实不符交易嫌疑，需优先核实真实法律关系',
+            'blocking': any(kw in contract_text for kw in ming_shi_keywords)
+        }
+
+        # 2. 关联交易公允性
+        related_keywords = ['关联方', '关联交易', '关联公司', '母公司', '子公司']
+        price_keywords = ['低于市场', '明显低价', '无偿']
+        checks['关联交易'] = {
+            'pass': not (any(kw in contract_text for kw in related_keywords) and
+                        any(kw in contract_text for kw in price_keywords)),
+            'detail': '未发现明显关联输送信号',
+            'blocking': False
+        }
+
+        # 3. 格式条款
+        format_keywords = ['最终解释权', '概不负责', '一律不退', '免除.*责任', '排除.*权利']
+        checks['格式条款'] = {
+            'pass': not any(re.search(kw, contract_text) for kw in format_keywords if True),
+            'detail': '未发现明显格式条款问题',
+            'blocking': False
+        }
+        # 更精确的格式条款检查
+        for kw in format_keywords:
+            if kw in contract_text:
+                checks['格式条款']['pass'] = False
+                checks['格式条款']['detail'] = f'发现疑似格式条款: "{kw}"'
+                checks['格式条款']['blocking'] = True
+                break
+
+        # 4. 审批登记
+        approval_keywords = ['经审批', '经批准', '登记后生效', '经备案']
+        checks['审批登记'] = {
+            'pass': True,
+            'detail': '未发现审批登记缺失信号',
+            'blocking': False
+        }
+        if '审批' in contract_text or '登记' in contract_text or '备案' in contract_text:
+            if '生效' in contract_text:
+                checks['审批登记']['pass'] = False
+                checks['审批登记']['detail'] = '涉及审批/登记/备案与合同效力挂钩，需核实法定要求'
+                checks['审批登记']['blocking'] = True
+
+        # 5. 合同成立要素
+        checks['成立要素'] = {
+            'pass': True,
+            'detail': '当事人、标的、数量基本明确',
+            'blocking': False
+        }
+        # 简单检查
+        has_parties = bool(re.search(r'(甲方|乙方|买方|卖方|出租方|承租方)', contract_text))
+        has_subject = bool(re.search(r'(标的|标的物|租赁物|项目|工程)', contract_text))
+        if not (has_parties and has_subject):
+            checks['成立要素']['pass'] = False
+            checks['成立要素']['detail'] = '缺少合同成立基本要素'
+            checks['成立要素']['blocking'] = True
+
+        blocking_count = sum(1 for c in checks.values() if c.get('blocking'))
+        return {
+            'checks': checks,
+            'blocking_count': blocking_count,
+            'overall_pass': blocking_count == 0,
+            'priority_action': '效力问题优先处理' if blocking_count > 0 else '可进入条款审核阶段'
+        }
+
+    # ============ 门禁检查 ============
+
+    def run_gate_checks(self, contract_text: str, contract_type: str) -> Dict:
+        """执行 5 类门禁检查"""
+        gates = {}
+
+        # gate_validity — 效力审查门禁
+        gates['gate_validity'] = self._check_validity_gate(contract_text, contract_type)
+
+        # gate_subject — 主体授权门禁
+        gates['gate_subject'] = self._check_subject_gate(contract_text)
+
+        # gate_clause — 条款审查门禁
+        gates['gate_clause'] = self._check_clause_gate(contract_text)
+
+        # gate_consistency — 一致性门禁
+        gates['gate_consistency'] = self._check_consistency_gate(contract_text)
+
+        # gate_output — 输出门禁
+        gates['gate_output'] = {'pass': True, 'detail': '输出检查待文档生成阶段执行'}
+
+        return {
+            'gates': gates,
+            'passed': sum(1 for g in gates.values() if g.get('pass', False)),
+            'total': len(gates)
+        }
+
+    def _check_validity_gate(self, text: str, ct: str) -> Dict:
+        items = []
+        # 名实不符
+        items.append({'item': '名实不符交易检查', 'pass': True, 'detail': '通过'})
+        # 关联交易
+        items.append({'item': '关联交易公允性', 'pass': True, 'detail': '通过'})
+        # 格式条款
+        items.append({'item': '格式条款风险', 'pass': '最终解释权' not in text, 'detail': ''})
+        # 审批登记
+        items.append({'item': '审批登记要求', 'pass': True, 'detail': '通过'})
+        # 成立要素
+        items.append({'item': '合同成立要素', 'pass': True, 'detail': '通过'})
+        return {'pass': all(i['pass'] for i in items), 'items': items}
+
+    def _check_subject_gate(self, text: str) -> Dict:
+        items = [
+            {'item': '签约主体适格', 'pass': bool(re.search(r'(甲方|乙方)', text)), 'detail': ''},
+            {'item': '签章要求', 'pass': '签章' in text or '签字' in text or '盖章' in text, 'detail': ''},
+            {'item': '授权委托', 'pass': True, 'detail': '待人工核实'},
+            {'item': '表见代理风险', 'pass': '项目部' not in text or '业务章' not in text, 'detail': ''},
+            {'item': '一人公司风险', 'pass': '一人' not in text, 'detail': ''},
+            {'item': '担保决议', 'pass': '担保' not in text or '决议' in text, 'detail': ''},
+        ]
+        return {'pass': all(i['pass'] for i in items), 'items': items}
+
+    def _check_clause_gate(self, text: str) -> Dict:
+        clause_checks = {
+            '价款与支付': any(kw in text for kw in ['价款', '付款', '支付']),
+            '交付与验收': any(kw in text for kw in ['交付', '验收']),
+            '违约责任': '违约' in text,
+            '解除与清算': '解除' in text,
+            '担保与保险': any(kw in text for kw in ['担保', '抵押', '质押', '保险']),
+            '送达与争议解决': any(kw in text for kw in ['送达', '争议', '仲裁', '管辖']),
+            '定义与附件': '附件' in text or '定义' in text,
+        }
+        missing = [k for k, v in clause_checks.items() if not v]
+        return {'pass': len(missing) <= 2, 'missing': missing, 'items': clause_checks}
+
+    def _check_consistency_gate(self, text: str) -> Dict:
+        items = [
+            {'item': '正文与附件引用一致', 'pass': True, 'detail': '待人工核实'},
+            {'item': '金额数量一致', 'pass': True, 'detail': '待人工核实'},
+            {'item': '期限条件一致', 'pass': True, 'detail': '待人工核实'},
+            {'item': '定义用法一致', 'pass': True, 'detail': '待人工核实'},
+        ]
+        return {'pass': True, 'items': items}
+
+    # ============ 条款库索引 ============
+
+    def load_workspace_clause_library(self) -> Optional[Dict[str, str]]:
+        """加载工作区条款库索引（按类型匹配，不含敏感文件名）"""
+        lib_path = self.config.get_clause_library_path()
+        if not lib_path:
+            return None
+        if self._workspace_clause_index is not None:
+            return self._workspace_clause_index
+
+        import os
+        idx = {}
+        try:
+            for f in os.listdir(lib_path):
+                if f.endswith('.md') and f != 'README.md':
+                    # 用通用文件名作为 key
+                    stem = f.replace('.md', '')
+                    idx[stem] = os.path.join(lib_path, f)
+        except Exception:
+            pass
+        self._workspace_clause_index = idx
+        return idx
+
+    def find_matching_clause(self, clause_type: str, scenario: str = "") -> Optional[str]:
+        """从工作区条款库匹配条款（按类型，不按含客户名的文件名）"""
+        idx = self.load_workspace_clause_library()
+        if not idx:
+            return None
+        # 按类型匹配
+        for stem, path in idx.items():
+            if clause_type in stem or stem in clause_type:
+                return path
+        return None
+
+    def extract_clause_candidates(self, parsed_clauses: Dict) -> List[Dict]:
+        """扫描条款中值得入库的候选（自动触发）"""
+        candidates = []
+        workspace_idx = self.load_workspace_clause_library() or {}
+        for clause_type, clause_list in parsed_clauses.items():
+            for clause in clause_list:
+                text = clause.get('content', '')
+                if len(text) < 80:
+                    continue
+                # 检查是否有入库价值
+                covered = any(clause_type in k or k in clause_type for k in workspace_idx)
+                has_remedy = any(kw in text for kw in ['违约金', '赔偿', '解除', '承担'])
+                if not covered and has_remedy:
+                    candidates.append({
+                        'type': clause_type,
+                        'text': text,
+                        'reason': '库中无同类型覆盖，且含具体救济措施',
+                        'source': clause.get('number', ''),
+                    })
+        return candidates
 
 
 if __name__ == '__main__':

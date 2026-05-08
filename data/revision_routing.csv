@@ -1,0 +1,22 @@
+issue_type,default_method,auto_applicable,self_check_questions,notes
+错别字/笔误,track_changes,True,,raw XML 文本替换
+标点错误,track_changes,True,,raw XML 文本替换
+日期格式错误,track_changes,True,,raw XML 文本替换
+法律名称过时,track_changes,True,,如合同法→民法典
+银行名称或公司名称错误,track_changes,True,,直接修订
+实现债权费用条款缺失,track_changes,True,,所有合同必查
+送达确认条款缺失,track_changes,True,,正式合同原则上应有
+签章生效条款不完整,track_changes,True,,公司间合同重点核查
+声明与保证条款缺失,track_changes,True,,涉及公司主体或关联关系时
+限制收款方式条款缺失,track_changes,True,,采购承揽服务合同
+反商业贿赂条款缺失,track_changes,True,,采购承揽服务工程合同
+独立关系声明缺失,track_changes,True,,承揽委托劳务中介合同
+一人公司补充条款缺失,track_changes,True,,对方为一人有限责任公司时
+条款矛盾或文本不一致,comment,False,"2,3","指出矛盾位置给出倾向性建议"
+验收标准重构,comment,False,"2,4","给出完整建议文本多个方案"
+违约金数额调整,comment,False,"2,3,4","列出方案客户选择"
+知识产权归属重大调整,comment,False,"2,4","列出方案标注倾向"
+付款比例调整,comment,False,"2,3","说明风险客户决定"
+默示同意条款修改,comment,False,"2,3","说明风险和建议"
+事实待核实,comment,False,"","标注待核实事项"
+多方案需客户选择,comment,False,"4","列出方案标注倾向"

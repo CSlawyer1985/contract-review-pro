@@ -92,6 +92,12 @@ class SanguanAnalysis:
             'suggestions': []
         }
 
+        # 检查0: 效力审查优先（合同效力问题优先于条款优化）
+        validity_issues = self._check_validity_priority(contract_text)
+        if validity_issues:
+            analysis['risks'].extend(validity_issues)
+            analysis['rating'] = '差'
+
         # 检查1: 合同类型合法性
         analysis['findings'].append({
             'category': '合同类型',
@@ -440,6 +446,60 @@ class SanguanAnalysis:
             'operability': '是否可操作',
             'dispute_prevention': '争议预防机制'
         }
+
+    # ============ 效力优先 ============
+
+    def _check_validity_priority(self, text: str) -> List[Dict]:
+        """效力审查优先检查"""
+        issues = []
+        # 名实不符信号
+        if any(kw in text for kw in ['名为', '实为', '名为买卖', '名为合作', '名为投资']):
+            issues.append({
+                'risk_type': '致命风险',
+                'description': '可能存在名实不符交易，合同效力存疑',
+                'level': '致命风险',
+                'suggestion': '优先核实真实法律关系，效力问题优先于条款优化'
+            })
+        # 主体资质
+        if any(kw in text for kw in ['项目部章', '业务章', '个人签字']):
+            issues.append({
+                'risk_type': '重要风险',
+                'description': '签章方式可能引发表见代理争议',
+                'level': '重要风险',
+                'suggestion': '建议要求法定代表人签字并加盖公司公章'
+            })
+        return issues
+
+    # ============ 8 维度评分 ============
+
+    def generate_dimension_scoring(self, contract_text: str, analysis_results: Dict) -> Dict[str, float]:
+        """生成 8 维度 1-5 评分"""
+        dims = {
+            "合同效力与合规性": 1.0, "价款与支付": 1.0, "交付与验收": 1.0,
+            "违约责任": 1.0, "知识产权与保密": 1.0, "合同解除与终止": 1.0,
+            "争议解决": 1.0, "主体授权与担保": 1.0,
+        }
+        # 基于合同文本的简单规则评分
+        if not any(kw in contract_text for kw in ['违约', '违约金', '赔偿']):
+            dims["违约责任"] = 4.0
+        if not any(kw in contract_text for kw in ['解除', '终止']):
+            dims["合同解除与终止"] = 3.5
+        if not any(kw in contract_text for kw in ['争议', '仲裁', '诉讼', '管辖']):
+            dims["争议解决"] = 4.0
+        if not any(kw in contract_text for kw in ['验收', '检验', '测试']):
+            dims["交付与验收"] = 3.5
+        if not any(kw in contract_text for kw in ['付款', '支付', '价款', '价格']):
+            dims["价款与支付"] = 3.0
+        # 从分析结果中读取风险
+        for risk in (analysis_results.get('risks', []) or []):
+            desc = risk.get('description', '')
+            if any(kw in desc for kw in ['无效', '不成立', '违法', '强制性']):
+                dims["合同效力与合规性"] = max(dims["合同效力与合规性"], 4.5)
+            if any(kw in desc for kw in ['担保', '抵押', '质押', '授权', '主体']):
+                dims["主体授权与担保"] = max(dims["主体授权与担保"], 3.5)
+            if any(kw in desc for kw in ['知识产权', '保密', '归属']):
+                dims["知识产权与保密"] = max(dims["知识产权与保密"], 3.5)
+        return dims
 
 
 if __name__ == '__main__':

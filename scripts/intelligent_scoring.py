@@ -8,23 +8,21 @@ import re
 
 
 class RiskScoringSystem:
-    """风险评分系统"""
+    """风险评分系统 — 含 8 维度评分和六维度综合"""
+
+    # 8 维度权重
+    DIMENSION_WEIGHTS = {
+        "合同效力与合规性": 0.25, "价款与支付": 0.15, "交付与验收": 0.15,
+        "违约责任": 0.20, "知识产权与保密": 0.05, "合同解除与终止": 0.10,
+        "争议解决": 0.05, "主体授权与担保": 0.05,
+    }
 
     def __init__(self):
-        """初始化评分系统"""
-        # 风险权重配置
         self.weight_config = {
-            'commercial_risk': 0.3,      # 商业风险权重
-            'legal_risk': 0.4,          # 法律风险权重
-            'practical_risk': 0.3       # 实务风险权重
+            'commercial_risk': 0.3, 'legal_risk': 0.4, 'practical_risk': 0.3
         }
-
-        # 风险等级评分映射
         self.level_scores = {
-            '致命风险': 100,
-            '重要风险': 70,
-            '一般风险': 40,
-            '轻微瑕疵': 10
+            '致命风险': 100, '重要风险': 70, '一般风险': 40, '轻微瑕疵': 10
         }
 
     def calculate_comprehensive_risk_score(self,
@@ -289,6 +287,58 @@ class RiskScoringSystem:
 
         return base
 
+
+    # ============ 8 维度加权评分 ============
+
+    def calculate_dimension_weighted_score(self, radar_data):
+        """基于 8 维度雷达数据计算加权综合评分"""
+        weighted_sum = 0
+        total_weight = 0
+        dim_scores = {}
+        for dim, score in radar_data.items():
+            weight = self.DIMENSION_WEIGHTS.get(dim, 0.05)
+            normalized = (score - 1) * 25
+            dim_scores[dim] = round(normalized, 1)
+            weighted_sum += normalized * weight
+            total_weight += weight
+        comprehensive = weighted_sum / total_weight if total_weight > 0 else 0
+        level = self._determine_risk_level(comprehensive)
+        return {
+            "comprehensive_score": round(comprehensive, 2),
+            "risk_level": level,
+            "dimension_scores": dim_scores,
+            "highest_risk_dimension": max(dim_scores, key=dim_scores.get) if dim_scores else "",
+            "highest_score": max(dim_scores.values()) if dim_scores else 0,
+        }
+
+    # ============ 六维度综合 ============
+
+    def calculate_six_dimension_composite(self, risks_with_dimensions):
+        """汇总所有风险的六维度评价"""
+        composite = {dim: {"count": 0, "highest_severity": "轻微瑕疵"}
+                     for dim in ["风险定性", "风险敞口", "发生概率", "可规避性", "商业权衡", "紧迫性"]}
+        sev_order = {"致命风险": 4, "重要风险": 3, "一般风险": 2, "轻微瑕疵": 1}
+        for risk in risks_with_dimensions:
+            six_dim = risk.get("six_dimensions", {})
+            severity = risk.get("risk_type", "一般风险")
+            for dim in composite:
+                if dim in six_dim:
+                    composite[dim]["count"] += 1
+                    if sev_order.get(severity, 0) > sev_order.get(composite[dim]["highest_severity"], 0):
+                        composite[dim]["highest_severity"] = severity
+        return composite
+
+    def generate_radar_chart_data(self, radar_data):
+        """生成雷达图结构化数据（供 docx 图表使用）"""
+        labels = list(radar_data.keys())
+        data = [radar_data.get(d, 1.0) for d in labels]
+        return {
+            "labels": labels,
+            "datasets": [{"label": "风险评分", "data": data}],
+            "max": 5,
+            "risk_levels": {d: "严重" if s >= 4 else ("关注" if s >= 3 else ("一般" if s >= 2 else "良好"))
+                          for d, s in radar_data.items()},
+        }
 
 if __name__ == '__main__':
     # 测试代码

@@ -12,6 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
+from datetime import datetime
 
 # docx skill 路径
 DOCX_SKILL_ROOT = Path("/Users/CS/.claude/skills/docx")
@@ -27,6 +28,13 @@ RISK_LEVEL_MAP = {
 class DocxTrackChangesGenerator:
     """将审核结果写入 Word 文档，生成带 Track Changes 和 Comments 的 .docx"""
 
+    # 常用条款自动插入优先级
+    STANDARD_CLAUSES = [
+        {"keyword": "实现债权费用", "suggest": "因实现债权而产生的一切费用（包括但不限于公证费、鉴定费、律师费、诉讼费、仲裁费、保全费、担保费等）由违约方承担。"},
+        {"keyword": "送达确认", "suggest": "双方确认以下地址为有效送达地址，通知以邮寄/快递/电子邮件方式送达，寄出之日起第3日视为送达。"},
+        {"keyword": "签章生效", "suggest": "本合同自双方签字并加盖公章之日起生效，合同一式[数量]份，各方各执[数量]份，具有同等法律效力。"},
+    ]
+
     def __init__(
         self,
         original_docx_path: str,
@@ -34,12 +42,14 @@ class DocxTrackChangesGenerator:
         output_dir: str,
         author: str = "陈石律师",
         initials: str = "CS",
+        revision_router=None,
     ):
         self.original_docx = Path(original_docx_path)
         self.risk_report = risk_report
         self.output_dir = Path(output_dir)
         self.author = author
         self.initials = initials
+        self.revision_router = revision_router  # RevisionRouter instance
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -247,6 +257,60 @@ class DocxTrackChangesGenerator:
 
         except Exception as e:
             print(f"[docx_generator] Track Change 应用失败: {e}")
+
+    def generate_comments_json(self, output_path: Optional[str] = None) -> Optional[str]:
+        """生成 Comments 数据 JSON（数据与脚本分离，中文安全）"""
+        import json
+        comments = []
+        risks_by_level = self.risk_report.get("risks_by_level", {})
+        for level in ["致命风险", "重要风险", "一般风险", "轻微瑕疵"]:
+            for risk in risks_by_level.get(level, []):
+                desc = risk.get("description", "")
+                method = "comment"
+                if self.revision_router:
+                    decision = self.revision_router.determine_revision_method(desc)
+                    method = decision.method
+                comments.append({
+                    "description": desc,
+                    "original": risk.get("original_text", ""),
+                    "suggestion": risk.get("suggestion", ""),
+                    "risk_level": level,
+                    "method": method,
+                    "legal_basis": risk.get("legal_basis", ""),
+                })
+        if output_path:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(comments, f, ensure_ascii=False, indent=2)
+            print(f"[docx_generator] Comments JSON: {output_path}")
+        return json.dumps(comments, ensure_ascii=False, indent=2)
+
+    def apply_standard_clause_insertions(self, doc, contract_text: str) -> List[str]:
+        """自动插入缺失的常用条款，返回已插入条款列表"""
+        inserted = []
+        for clause in self.STANDARD_CLAUSES:
+            if clause["keyword"] not in contract_text:
+                # 在文档末尾插入条款
+                try:
+                    editor = doc["word/document.xml"]
+                    # 找到最后一个段落并在其后插入
+                    body = editor.get_node(tag="w:body")
+                    if body is not None:
+                        para_elements = body.getElementsByTagName("w:p")
+                        if para_elements:
+                            last_para = para_elements[-1]
+                            insertion = (
+                                f'<w:p><w:pPr><w:rPr><w:b/></w:rPr></w:pPr>'
+                                f'<w:ins w:author="{self._escape(self.author)}" w:date="{datetime.now().isoformat()}">'
+                                f'<w:r><w:rPr><w:b/></w:rPr><w:t>{self._escape(clause["suggest"])}</w:t></w:r>'
+                                f'</w:ins></w:p>'
+                            )
+                            editor.insert_after(last_para, insertion)
+                            inserted.append(clause["keyword"])
+                except Exception:
+                    pass
+        if inserted:
+            print(f"[docx_generator] 自动插入常用条款: {inserted}")
+        return inserted
 
     @staticmethod
     def _get_node_text(node) -> str:
