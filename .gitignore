@@ -27,6 +27,12 @@ wheels/
 output/
 *.md
 
+# 例外：以下目录的 md 需要跟踪（V4.0 起）
+!SKILL.md
+!README.md
+!references/**/*.md
+!docs/**/*.md
+
 # IDE
 .vscode/
 .idea/

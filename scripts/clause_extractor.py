@@ -142,7 +142,9 @@ class ClauseExtractor:
 
 if __name__ == '__main__':
     print("=== 条款提取器测试 ===\n")
-    ws = "/Users/CS/Trae/个人工作/合同审核/.claude/clauses"
+    # 候选输出目录由调用方传入；此处用临时目录演示
+    import tempfile
+    ws = tempfile.mkdtemp(prefix="clause_candidates_")
     extractor = ClauseExtractor(ws)
 
     # 模拟条款

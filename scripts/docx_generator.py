@@ -1,11 +1,15 @@
 """
 Word Track Changes 生成器
-基于 docx skill 的 OOXML Document 类，将审核结果转化为 Word 修订模式文档。
+将审核结果转化为 Word 修订模式文档。
 
-依赖：/Users/CS/.claude/skills/docx/ 下的 Document 类和 ooxml 工具链
+双引擎设计（自包含）：
+- 增强引擎：环境中存在 Anthropic docx skill 时，使用其 Document library
+  （通过 DOCX_SKILL_ROOT 环境变量或 ~/.claude/skills/docx 自动检测）
+- 内置引擎：ooxml_lite（标准库 zipfile + minidom），零外部依赖，默认兜底
 """
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -14,8 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
 
-# docx skill 路径
-DOCX_SKILL_ROOT = Path("/Users/CS/.claude/skills/docx")
+from ooxml_lite import LiteDocument, pack_docx, unpack_docx
 
 RISK_LEVEL_MAP = {
     "致命风险": "P0",
@@ -23,6 +26,18 @@ RISK_LEVEL_MAP = {
     "一般风险": "P2",
     "轻微瑕疵": "P3",
 }
+
+
+def _find_docx_skill() -> Optional[Path]:
+    """检测环境中是否存在 docx skill 的 OOXML 工具链（可选增强，非依赖）"""
+    candidates = [
+        os.environ.get("DOCX_SKILL_ROOT", ""),
+        str(Path.home() / ".claude" / "skills" / "docx"),
+    ]
+    for cand in candidates:
+        if cand and (Path(cand) / "ooxml" / "scripts" / "unpack.py").exists():
+            return Path(cand)
+    return None
 
 
 class DocxTrackChangesGenerator:
@@ -64,55 +79,22 @@ class DocxTrackChangesGenerator:
             tmp_dir = tempfile.mkdtemp(prefix="contract_review_")
             unpacked_dir = Path(tmp_dir) / "unpacked"
 
-            # 1. unpack 原始 docx
+            # 1. unpack 原始 docx（引擎自动分派）
             self._unpack(self.original_docx, unpacked_dir)
 
-            # 2. 注入 docx skill 路径并初始化 Document
-            # 核心问题：contract-review-pro 的 scripts/ 与 docx skill 的 scripts/ 包名冲突
-            # 解决方案：临时清除 sys.modules 中的 scripts 包缓存，重新加载
-            docx_skill_ooxml = DOCX_SKILL_ROOT / "ooxml" / "scripts"
-
-            saved_modules = {}
-            for key in list(sys.modules.keys()):
-                if key.startswith("scripts") or key.startswith("ooxml"):
-                    saved_modules[key] = sys.modules.pop(key)
-
-            try:
-                # 确保 docx skill 根目录在最前面
-                if str(DOCX_SKILL_ROOT) in sys.path:
-                    sys.path.remove(str(DOCX_SKILL_ROOT))
-                sys.path.insert(0, str(DOCX_SKILL_ROOT))
-
-                from scripts.document import Document
-            finally:
-                # 恢复被清除的模块（保留新加载的）
-                pass
-
-            doc = Document(
-                str(unpacked_dir),
-                author=self.author,
-                initials=self.initials,
-                track_revisions=True,
-            )
+            # 2. 打开文档（引擎自动分派：docx skill Document / 内置 LiteDocument）
+            doc = self._open_document(unpacked_dir)
 
             # 3. 遍历风险项，生成修订和批注
             self._apply_all_changes(doc, self.risk_report)
 
-            # 4. 保存（自动验证 + 写回 unpacked_dir）
+            # 4. 保存（写回 unpacked_dir）
             doc.save(validate=False)
 
             # 5. 打包为 .docx
             output_filename = f"{contract_name}-审核修订版.docx"
             output_path = self.output_dir / output_filename
-
-            spec = importlib.util.spec_from_file_location(
-                "pack_mod", docx_skill_ooxml / "pack.py"
-            )
-            pack_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(pack_mod)
-            pack_document = pack_mod.pack_document
-
-            pack_document(str(unpacked_dir), str(output_path), validate=False)
+            self._pack(unpacked_dir, output_path)
 
             print(f"[docx_generator] 审核修订版已生成: {output_path}")
             return str(output_path)
@@ -127,9 +109,49 @@ class DocxTrackChangesGenerator:
             if tmp_dir:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    def _open_document(self, unpacked_dir: Path):
+        """打开 unpacked 文档：docx skill 可用时返回其 Document，否则返回内置 LiteDocument"""
+        skill_root = _find_docx_skill()
+        if skill_root is None:
+            return LiteDocument(
+                str(unpacked_dir),
+                author=self.author,
+                initials=self.initials,
+                track_revisions=True,
+            )
+
+        # 增强引擎：docx skill Document library
+        # 核心问题：contract-review-pro 的 scripts/ 与 docx skill 的 scripts/ 包名冲突
+        # 解决方案：临时清除 sys.modules 中的 scripts 包缓存，重新加载
+        saved_modules = {}
+        for key in list(sys.modules.keys()):
+            if key.startswith("scripts") or key.startswith("ooxml"):
+                saved_modules[key] = sys.modules.pop(key)
+
+        try:
+            if str(skill_root) in sys.path:
+                sys.path.remove(str(skill_root))
+            sys.path.insert(0, str(skill_root))
+
+            from scripts.document import Document
+        finally:
+            pass
+
+        return Document(
+            str(unpacked_dir),
+            author=self.author,
+            initials=self.initials,
+            track_revisions=True,
+        )
+
     def _unpack(self, docx_path: Path, output_dir: Path):
-        """调用 docx skill 的 unpack.py 解压 docx"""
-        unpack_script = DOCX_SKILL_ROOT / "ooxml" / "scripts" / "unpack.py"
+        """解压 docx：docx skill 可用时走其 unpack.py，否则走内置 zipfile 实现"""
+        skill_root = _find_docx_skill()
+        if skill_root is None:
+            unpack_docx(str(docx_path), str(output_dir))
+            print(f"[docx_generator] Unpack 完成（内置引擎）: {output_dir}")
+            return
+        unpack_script = skill_root / "ooxml" / "scripts" / "unpack.py"
         result = subprocess.run(
             [sys.executable, str(unpack_script), str(docx_path), str(output_dir)],
             capture_output=True,
@@ -138,6 +160,18 @@ class DocxTrackChangesGenerator:
         if result.returncode != 0:
             raise RuntimeError(f"Unpack 失败: {result.stderr}")
         print(f"[docx_generator] Unpack 完成: {output_dir}")
+
+    def _pack(self, unpacked_dir: Path, output_path: Path):
+        """打包 docx：docx skill 可用时走其 pack.py，否则走内置 zipfile 实现"""
+        skill_root = _find_docx_skill()
+        if skill_root is None:
+            pack_docx(str(unpacked_dir), str(output_path))
+            return
+        pack_script = skill_root / "ooxml" / "scripts" / "pack.py"
+        spec = importlib.util.spec_from_file_location("pack_mod", pack_script)
+        pack_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pack_mod)
+        pack_mod.pack_document(str(unpacked_dir), str(output_path), validate=False)
 
     def _apply_all_changes(self, doc, risk_report: Dict):
         """遍历所有风险项，应用修订和批注"""

@@ -2,14 +2,14 @@
 
 <div align="center">
 
-**专业合同审核 Claude Skill — 将合同审核工作区成熟方法论编码为可执行流程**
+**专业合同审核 Claude Skill — 完全自包含的合同审核方法论与可执行流程**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/CSlawyer1985/contract-review-pro)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/CSlawyer1985/contract-review-pro)
 [![Author](https://img.shields.io/badge/author-陈石(CS)-orange.svg)](https://github.com/CSlawyer1985)
 [![Claude](https://img.shields.io/badge/Claude-Skill-purple.svg)](https://claude.ai/)
 
-7步工作流 | 5类审查门禁 | 15风险标签 | 六维度评价 | 终稿三件套 | Track Changes + Comments
+7步工作流 | 5+16类审查门禁 | 15风险标签 | 8维度评分 | 终稿三件套 + HTML报告 | Track Changes + Comments
 
 [快速开始](#-快速开始) • [核心特性](#-核心特性) • [工作流程](#-核心工作流7步) • [FAQ](#-常见问题)
 
@@ -17,39 +17,41 @@
 
 ---
 
-## V3.0 更新摘要
+## V4.0 更新摘要
 
-本次升级将合同审核工作区的成熟实践系统性地编码进 Skill，核心变化：
+本次升级主题：**完全自包含** + **输出呈现升级**。Skill 不再依赖任何外部规则文件、知识库路径或工具，自身即可完成全部审核工作。
 
-| 维度 | V2.1 | V3.0 |
+| 维度 | V3.0 | V4.0 |
 |------|------|------|
-| 工作流 | 隐式4步 | **7步有状态工作流**（客户识别→review-state→通读→效力优先→问题清单→逐条审核→条款提取） |
-| 门禁体系 | 单一检查清单 | **5类强制门禁**（效力/主体/条款/一致性/输出），效力审查优先于条款优化 |
-| 风险标签 | 四级严重度 | **15标签体系**（效力与合规5 + 交易结构与履行5 + 争议解决与文本5） |
-| 风险评价 | 三维度评分 | **六维度评价**（定性/敞口/概率/可规避性/商业权衡/紧迫性）+ **8维度雷达图** |
-| 修订方式 | 凭感觉选择 | **路由决策树 + 4问自检**，21条路由规则，8条常用条款默认 Track Changes |
-| 条款审查 | 单层检查 | **正反两面法**（正面→反面→救济执行） |
-| 条款库 | 内置 CSV | **引用工作区105条款库**（索引匹配，三步匹配法） |
-| 客户配置 | 无 | **ClientConfig** 自动识别客户并加载偏好，未命中不套用 |
-| 输出 | Markdown + 简单批注 | **终稿三件套**（批注版合同 + 5模块法律意见书 + 法律分析），全部 .docx |
-| 条款提取 | 无 | **Step 7 自动提取**，扫描值得入库的条款写法 |
+| 外部依赖 | 引用工作区条款库/知识库路径/docx skill | **零外部依赖**：16 个专项门禁内化 `references/gates/`，内置 OOXML 引擎 `ooxml_lite.py` 兜底批注版生成 |
+| 立场机制 | 仅客户识别 | **立场声明（强制）**：代表方/利益排序/必守项 vs 可谈项，每次审核重做 |
+| 审核深度 | 通用 5 类门禁 | 通用门禁 + **13 类合同专项门禁 + 3 个条款级门禁**（反稀释/回购/对赌），Step 1.5 类型路由激活 |
+| 框架审阅 | 无 | **Step 2.5 四问**：义务单向性/退出权不对等/虚假前提/违约对称性 |
+| 评分体系 | 三维百分制加权（旧） | **8 维度 1-5 分制** + 评分标尺 + 跨阶段严重程度下限校验 |
+| 修订路由 | TC/Comments 二分 | **5 分类动作**（replace/insert/delete/comment/report-only）+ 最小必要修改 + 修订块合并 |
+| 法律意见书 | Markdown 文本 | **真正 .docx**：深蓝标题 + 仿宋正文 + 元信息卡 + 页脚页码 + **客户速览页** + "清单之外的一个问题"强制追问 |
+| 可视化 | 无 | **HTML 可视化报告**（第四件可选）：8 维雷达 + 风险热力图 + 条款对比卡 + 等级筛选器，单文件离线可开 |
+| 检索协议 | 每问题至少 2 来源 | **分层检索 + ≥5 条直接相关命中充分性标准** + 阻断级合规自检 |
+| 书籍引用 | 含外部方法论书单 | **全部移除**，方法论以本 skill 自带文档为唯一来源 |
 
 ### 架构升级
 
 ```
-V2.1:  ContractReviewPro 类 → quick_review() → Markdown 输出
+V3.0:  7步工作流 + Markdown 意见书 + 依赖工作区条款库/知识库路径
 
-V3.0:  ContractReviewSession（有状态会话）
-       ├── Step 0: ClientConfig.load_from_workspace()
-       ├── Step 1-2: ContractAnalyzer.parse_contract()
-       ├── Step 3: ContractAnalyzer.run_validity_review() + run_gate_checks()
-       ├── Step 5: 知识库研究（AI 执行，skill 提供路由）
-       ├── Step 6: ClauseReviewer.review_clause_dual()
-       │           RiskAssessment.evaluate_risk_dimensions()
-       │           RevisionRouter.determine_revision_method()
-       │           RiskScoringSystem.calculate_dimension_weighted_score()
-       ├── Step 7: ClauseExtractor.scan_for_candidates()
-       └── Output: DocumentGenerator → 终稿三件套 .docx
+V4.0:  ContractReviewSession（有状态会话，完全自包含）
+       ├── Step 0:   客户识别 + 立场声明（必守/可谈二分）
+       ├── Step 1.5: 合同类型路由 → references/gates/ 专项门禁
+       ├── Step 2.5: 框架审阅四问
+       ├── Step 3:   ContractAnalyzer.run_validity_review() 效力优先
+       ├── Step 5:   分层检索 + ≥5 条充分性标准（AI 执行）
+       ├── Step 6:   ClauseReviewer.review_clause_dual()
+       │             RevisionRouter（5 分类动作）
+       │             RiskScoringSystem（8 维度 1-5 分制 + 严重程度下限）
+       ├── Step 7:   ClauseExtractor.scan_for_candidates()
+       └── Output:   三件套 .docx（document_generator 版式规范内置）
+                     + 批注版（docx_generator 双引擎：docx skill / ooxml_lite）
+                     + HTML 可视化报告（html_report_generator，可选）
 ```
 
 ---
@@ -58,23 +60,23 @@ V3.0:  ContractReviewSession（有状态会话）
 
 ### 🛡️ 系统性
 
-- **7步有状态工作流**：从客户识别到条款提取的完整审核链路，每步有明确输入/输出
-- **5类强制门禁**：效力→主体→条款→一致性→输出，效力问题优先于条款优化
+- **7步有状态工作流**：立场声明 → 类型路由 → 框架审阅 → 效力优先 → 逐条审核 → 条款提取
+- **5类通用门禁 + 16个专项门禁**：13 类合同专项 + 3 个条款级深挖（反稀释/回购/对赌）
 - **15标签风险体系**：覆盖效力合规、交易履行、争议文本三大维度
 - **六维度风险评价**：定性/敞口/概率/可规避性/商业权衡/紧迫性，拒绝笼统"高风险"
 
 ### 📋 专业性
 
 - **正反两面法**：正面审查 → 反面审查 → 救济执行，三层递进不遗漏
-- **路由决策树**：21条路由规则 + 4问自检，修订方式有据可依
-- **三观四步法**：深度审核时启用，法律观→商业观→风险观→行动方案
-- **条款库索引**：105个条款、15+业务领域，三步匹配法精准调用
+- **修订 5 分类路由**：replace/insert/delete/comment/report-only + 4 问自检 + 最小必要修改
+- **三层方法论**：深度审核时启用宏观交易结构 → 中观合同形式 → 微观合同条款分析
+- **内置条款标准**：18 类标准条款 CSV + 可选项目级条款库扩展，三步匹配法精准调用
 
 ### 🚀 实用性
 
-- **终稿三件套**：批注版合同 + 法律意见书 + 法律分析，全部 .docx
-- **Track Changes 原生修订**：OOXML 标准，Word 直接接受/拒绝修订
-- **客户配置自动识别**：加载客户偏好，未命中不套用
+- **终稿三件套**：批注版合同 + 法律意见书 + 法律分析，全部 .docx（意见书含版式规范与客户速览页）
+- **HTML 可视化报告**：8 维雷达 + 风险热力图 + 条款对比卡，单文件离线可开
+- **Track Changes 原生修订**：OOXML 标准，Word 直接接受/拒绝修订；内置引擎零依赖兜底
 - **条款自动提取**：扫描值得入库的条款写法，持续丰富条款库
 
 ### 📊 数据驱动
@@ -82,7 +84,7 @@ V3.0:  ContractReviewSession（有状态会话）
 - **30种合同类型**：覆盖7大业务领域，每种配有专属风险模板
 - **124个风险点模板**：含15标签标注、8维度归类、六维度占位
 - **53项审查检查清单**：按5类门禁分组，标注可自动检测项
-- **18类标准条款模板**：含工作区条款库索引和触发条件
+- **18类标准条款模板**：含触发条件和插入优先级
 
 ---
 
@@ -126,18 +128,28 @@ V3.0:  ContractReviewSession（有状态会话）
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Step 0: 识别客户                                    │
-│  文本匹配关联主体 → 加载 client-rules → 提取配置      │
+│  Step 0: 识别客户 + 立场声明（强制）                  │
+│  代表方/核心利益排序/必守项 vs 可谈项，每次重做         │
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
 │  Step 1: 建立 review-state                           │
-│  源文件、客户、起草方、交易结构、风险预分类（8维度）    │
+│  源文件、客户、立场、交易结构、风险预分类（8维度1-5分） │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  Step 1.5: 合同类型路由                               │
+│  激活 references/gates/ 专项门禁（13类+3条款级）       │
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
 │  Step 2: 通读合同                                    │
 │  梳理主体/标的/价款/交付/结算/违约/解除/担保/争议/附件 │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  Step 2.5: 框架审阅（四问）                           │
+│  义务单向性/退出权不对等/虚假前提/违约对称性           │
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
@@ -151,13 +163,13 @@ V3.0:  ContractReviewSession（有状态会话）
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
-│  Step 5: 知识库研究                                  │
-│  每个问题至少检索2个来源，读取 knowledge-routing.md     │
+│  Step 5: 法律研究（分层检索）                         │
+│  检索改写 → 优先源 → ≥5条充分性判断 → 来源标注         │
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
 │  Step 6: 逐条审核                                    │
-│  正反两面法 × 六维度评价 × 路由决策树                   │
+│  正反两面法 × 六维度评价 × 修订5分类路由                │
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
@@ -166,7 +178,7 @@ V3.0:  ContractReviewSession（有状态会话）
 └──────────────────────┬──────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
-│        输出终稿三件套 .docx ✅                        │
+│   输出终稿三件套 .docx + HTML 可视化报告（可选）✅     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -231,19 +243,24 @@ V3.0:  ContractReviewSession（有状态会话）
 
 ## 终稿三件套
 
-`output/` 默认产出（全部 `.docx`）：
+`output/` 默认产出（全部 `.docx`），可选第四件 HTML 可视化报告：
 
 ### 1. 批注版合同
 
-Track Changes + Comments，走 Document Library 三步法（unpack→编辑→pack），禁止 python-docx 裸 API。
+Track Changes + Comments，双引擎自动分派（环境存在 docx skill 时用其 Document library，否则用内置 `ooxml_lite` 引擎），禁止 python-docx 裸 API。OOXML 编辑纪律内置：del+ins 配对、独立段落插入、最短锚点、跨 `<w:t>` 分片拼接匹配。
 
-### 2. 法律意见书（5模块）
+### 2. 法律意见书（客户速览页 + 5 模块）
 
-风险总览（数量卡片+雷达图+类型分布+综合等级）→ 合同基本信息 → 逐条审核意见（表格）→ 总体评价与签约利弊分析 → 法律依据清单
+客户速览页（结论段 + Top 风险 + 谈判要点）→ 风险总览（数量卡片+雷达图+类型分布+综合等级）→ 合同基本信息 → 逐条审核意见（七列表格）→ 总体评价与签约利弊分析（含"清单之外的一个问题"强制追问）→ 法律依据清单。
+版式规范内置：深蓝标题 + 仿宋正文 + 浅底元信息卡 + 棕色标签 + 页脚页码 + 紧凑正式件参数。
 
 ### 3. 法律分析
 
 内部参考，修订点对应的法条/司法解释/指导案例/类案裁判规则。
+
+### 4. HTML 可视化报告（可选）
+
+8 维雷达图 + 风险热力图 + 条款对比卡 + 等级筛选器 + 谈判策略三层标签，单文件离线可开（Chart.js 已内联）。
 
 > **核心原则：律师分析利弊，客户做决定。** 禁止以"建议签署""不建议签署"替代利弊分析。
 
@@ -254,9 +271,10 @@ Track Changes + Comments，走 Document Library 三步法（unpack→编辑→pa
 - **合同类型**：30种，覆盖7大业务领域
 - **风险点模板**：124个，每个含15标签标注、8维度归类、六维度占位、默认修订方式
 - **审查检查清单**：53项，按5类门禁分组，标注可自动检测项
-- **标准条款**：18类模板，含工作区条款库索引、触发条件和插入优先级
-- **路由规则**：21条，覆盖错别字到多方案选择的完整决策链
-- **代码规模**：~4,500行，12个核心模块
+- **专项门禁**：16 个（13 类合同 + 3 条款级），全部内置于 references/gates/
+- **标准条款**：18类模板，含触发条件和插入优先级
+- **路由规则**：23条（含 5 分类动作列），覆盖错别字到多方案选择的完整决策链
+- **代码规模**：~5,000行，13个核心模块
 
 ---
 
@@ -264,31 +282,42 @@ Track Changes + Comments，走 Document Library 三步法（unpack→编辑→pa
 
 ```
 contract-review-pro/
-├── SKILL.md                    # AI 面向指令文档
+├── SKILL.md                    # AI 面向指令文档（V4.0）
 ├── main.py                     # 主入口 + ContractReviewSession
-├── skill.json                  # Skill 元数据（V3.0）
+├── skill.json                  # Skill 元数据（V4.0）
 ├── README.md                   # 本文件
 │
-├── scripts/                    # 核心模块（12个）
+├── scripts/                    # 核心模块（13个）
 │   ├── review_config.py        # 审核配置 + ClientConfig
 │   ├── contract_analyzer.py    # 合同解析 + 效力审查 + 门禁
-│   ├── risk_assessment.py      # 风险评估 + 六维度 + 雷达图
+│   ├── risk_assessment.py      # 风险评估 + 六维度
 │   ├── clause_review.py        # 正反两面法 + 条款库匹配
-│   ├── revision_router.py      # 路由决策树 + 4问自检 ★新
-│   ├── clause_extractor.py     # 自动条款提取 ★新
-│   ├── intelligent_scoring.py  # 8维度评分 + 六维度综合
-│   ├── sanguan_analysis.py     # 三观四步法深度分析
-│   ├── document_generator.py   # 三件套 docx 生成
-│   └── docx_generator.py       # Track Changes + Comments
+│   ├── revision_router.py      # 修订 5 分类路由 + 4 问自检
+│   ├── clause_extractor.py     # 自动条款提取
+│   ├── intelligent_scoring.py  # 8 维度 1-5 分制评分 + 严重程度下限
+│   ├── sanguan_analysis.py     # 宏观-中观-微观三层分析
+│   ├── document_generator.py   # 三件套 docx 生成（版式规范内置）
+│   ├── docx_generator.py       # 批注版（双引擎自动分派）
+│   ├── ooxml_lite.py           # 内置 OOXML 引擎（零依赖兜底）★V4.0
+│   └── html_report_generator.py # HTML 可视化报告 ★V4.0
 │
-├── data/                       # 数据文件（6个CSV）
-│   ├── contract_types.csv      # 30种合同类型
-│   ├── risk_templates.csv      # 124个风险点
-│   ├── clause_standards.csv    # 18类标准条款
-│   ├── review_checklists.csv   # 53项检查清单
-│   ├── risk_labels.csv         # 15标签体系 ★新
-│   └── revision_routing.csv    # 21条路由规则 ★新
+├── references/gates/           # 专项门禁（16 个，V4.0 内化）★V4.0
+│   ├── 08-建设工程.md ... 20-VCPE增资.md   # 13 类合同专项门禁
+│   └── clause-gates/           # 条款级门禁（反稀释/回购/对赌）
 │
+├── assets/                     # HTML 报告资产 ★V4.0
+│   ├── report_template.html    # 报告模板（数据占位符注入）
+│   └── chart.umd.min.js        # Chart.js 本地化（无 CDN 依赖）
+│
+├── data/                       # 数据文件（7 个 CSV）
+│   ├── contract_types.csv      # 30 种合同类型
+│   ├── risk_templates.csv      # 124 个风险点
+│   ├── clause_standards.csv    # 18 类标准条款
+│   ├── review_checklists.csv   # 53 项检查清单
+│   ├── risk_labels.csv         # 15 标签体系
+│   └── revision_routing.csv    # 23 条路由规则（含 5 分类动作列）
+│
+├── docs/archive/               # V1-V2 历史文档归档（含外部书目的旧引用，仅历史记录）
 └── output/                     # 终稿输出目录
 ```
 
@@ -319,26 +348,28 @@ result = quick_review(
 )
 ```
 
-### V3.0 新入口（工作区集成）
+### 完整工作流（7 步会话）
 
 ```python
 from main import review_with_workspace_config
 
 result = review_with_workspace_config(
     contract_path='/path/to/contract.docx',
-    workspace_path='/Users/CS/Trae/个人工作/合同审核',
-    client_name='示例客户',          # 可选，自动识别备选
+    workspace_path='/path/to/your/project',   # 可选：你的项目目录（含 client-rules/clauses 时自动加载）
+    client_name='示例客户',                    # 可选，自动识别备选
     user_context={'party': '甲方'},
     depth='standard'
 )
-# result['outputs'] → {'opinion': ..., 'analysis_doc': ..., 'annotated': ...}
+# result['outputs'] → {'opinion': ..., 'analysis_doc': ..., 'annotated': ..., 'html_report': ...}
 ```
+
+> workspace_path 是**可选增强**：指向你自己的项目目录时，skill 会加载其中的客户规则与条款库；不提供时 skill 以内置门禁、条款标准和检查清单独立完成全部审核。
 
 ---
 
 ## 条款库使用
 
-条款库位于工作区 `.claude/clauses/`（105个条款，15+业务领域），Skill 通过索引引用而非复制。
+内置标准条款库 `data/clause_standards.csv`（18 类标准条款）为默认条款来源；用户可在自己的项目目录建 `.claude/clauses/` 扩展条款库，存在则自动加载，不存在不影响任何流程。
 
 **三步匹配法**：
 
@@ -346,22 +377,25 @@ result = review_with_workspace_config(
 2. **匹配写法**（基础版 vs 强化版，按标的额和对方资信选择）
 3. **适配调整**（变量替换、表述统一、删去不适用内容）
 
-> 禁止不经适配直接复制条款文本。Skill 独立运行时使用自带 CSV 数据作为降级方案。
+> 禁止不经适配直接复制条款文本。
 
 ---
 
 ## 硬约束
 
-1. 禁止跳过通读直接审核
-2. 禁止跳过实质性法律问题研究
-3. 禁止跳过效力审查
-4. 禁止先写审核意见后补法律依据
-5. 禁止修改原始合同
-6. 禁止用 python-docx 裸 API 生成批注版合同
-7. 禁止将 .md 作为终稿交付
-8. 禁止从零写批注脚本
+1. 禁止跳过立场声明
+2. 禁止跳过通读直接审核
+3. 禁止跳过实质性法律问题研究（含充分性判断）
+4. 禁止跳过效力审查
+5. 禁止先写审核意见后补法律依据
+6. 禁止修改原始合同
+7. 禁止用 python-docx 裸 API 生成批注版合同
+8. 禁止将 .md 作为终稿交付
 9. 禁止将应 Track Changes 的增补条款降级为 Comments
 10. 禁止在未命中客户规则时套用其他客户偏好
+11. 禁止无声降级上游风险评级（跨阶段降级必须明示理由）
+12. 禁止依赖 skill 目录之外的规则文件、知识库路径或工具（可选增强除外）
+13. 禁止编造法律依据；检索不足时如实标注
 
 ---
 
@@ -380,11 +414,12 @@ result = review_with_workspace_config(
 
 | 版本 | 日期 | 关键变化 |
 |------|------|---------|
-| V1.1 | 2025-01 | 三观四步法集成、扩展到30种合同类型 |
+| V1.1 | 2025-01 | 三层方法论集成、扩展到30种合同类型 |
 | V1.2 | 2025-01 | 智能风险评分系统、深度审核功能 |
 | V2.0 | 2026-01 | 智能输出目录、详细批注版合同、风险可视化 |
 | V2.1 | 2026-04 | Word Track Changes + Comments、OOXML 原生修订标记 |
-| **V3.0** | **2026-05** | **7步工作流、5类门禁、15标签、六维度评价、终稿三件套、路由决策树、条款自动提取** |
+| V3.0 | 2026-05 | 7步工作流、5类门禁、15标签、六维度评价、终稿三件套、路由决策树、条款自动提取 |
+| **V4.0** | **2026-08** | **完全自包含（16 专项门禁内化、内置 OOXML 引擎）、立场声明、框架审阅、8 维度 1-5 分制、修订 5 分类、真 docx 意见书（版式规范+客户速览页）、HTML 可视化报告、检索充分性协议、外部书籍引用全部移除** |
 
 ---
 
@@ -414,7 +449,7 @@ result = review_with_workspace_config(
 
 ### Q4：如何处理客户特定的审查偏好？
 
-**A**：V3.0 新增 ClientConfig 模块，自动识别客户并加载 `.claude/client-rules/` 下的偏好配置。未命中时不套用任何客户规则，避免张冠李戴。
+**A**：ClientConfig 模块自动识别客户并加载项目目录 `.claude/client-rules/` 下的偏好配置（用户自建，可选）。未命中时不套用任何客户规则，避免张冠李戴。
 
 ---
 
@@ -473,7 +508,7 @@ result = review_with_workspace_config(
 #### 主要成果
 
 - **China Lawyer Analyst Skill** — 专业中国法律分析 Claude Skill（v4.0）
-- **Contract Review Pro** — 专业合同审核 AI 系统（v3.0）
+- **Contract Review Pro** — 专业合同审核 AI 系统（v4.0）
 - **Excellent Judgment Doc Skill** — 优秀裁判文书生成与质量评判工具
 - **Case Type Guide System** — 类案办案要件指南智能辅助系统
 

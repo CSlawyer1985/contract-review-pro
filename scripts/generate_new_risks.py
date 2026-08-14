@@ -312,10 +312,11 @@ new_contract_risks = [
     },
 ]
 
-# 输出为CSV格式
+# 输出为CSV格式（输出到 skill 自带 data/ 目录）
 import csv
+from pathlib import Path
 
-output_file = '/Users/CS/Trae/Claude/.trae/skills/contract-review-pro/data/risk_templates_new.csv'
+output_file = str(Path(__file__).resolve().parent.parent / 'data' / 'risk_templates_new.csv')
 
 with open(output_file, 'w', encoding='utf-8', newline='') as f:
     fieldnames = ['risk_id', 'risk_type', 'contract_type', 'clause_name',

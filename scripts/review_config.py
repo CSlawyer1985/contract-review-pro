@@ -200,18 +200,20 @@ if __name__ == '__main__':
         print(f"  门禁: {config.GATES}")
         print()
 
-    # 测试客户配置加载
+    # 测试客户配置加载（工作区路径由调用方运行时传入，此处仅演示接口）
     print("=== 客户配置测试 ===")
-    ws = "/Users/CS/Trae/个人工作/合同审核"
-    cc = ClientConfig.load_from_workspace(ws, "示例客户")
-    if cc:
-        print(f"客户: {cc.client_name}")
-        print(f"关联主体: {cc.associated_entities}")
-        print(f"审查重点: {cc.review_focus}")
+    ws = os.environ.get("CONTRACT_REVIEW_WORKSPACE", "")
+    if ws:
+        cc = ClientConfig.load_from_workspace(ws, "示例客户")
+        if cc:
+            print(f"客户: {cc.client_name}")
+            print(f"关联主体: {cc.associated_entities}")
+            print(f"审查重点: {cc.review_focus}")
+        else:
+            print("未找到客户规则")
+        # 测试含客户配置的 ReviewConfig
+        config = ReviewConfig('standard', client_config=cc, workspace_path=ws)
+        print(f"\n{config}")
+        print(f"  条款库路径: {config.get_clause_library_path()}")
     else:
-        print("未找到客户规则（预期：示例客户规则存在但敏感信息不入库）")
-
-    # 测试含客户配置的 ReviewConfig
-    config = ReviewConfig('standard', client_config=cc, workspace_path=ws)
-    print(f"\n{config}")
-    print(f"  条款库路径: {config.get_clause_library_path()}")
+        print("未设置 CONTRACT_REVIEW_WORKSPACE 环境变量，跳过工作区集成测试（skill 可独立运行）")

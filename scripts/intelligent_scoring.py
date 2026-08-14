@@ -1,183 +1,173 @@
 """
-智能风险评分系统
-V1.2: 多维度风险评估与评分
+智能风险评分系统（V4.0）
+8 维度 1-5 分制：与工作流雷达图、意见书风险总览共用同一套分制。
+评分标尺、跨阶段严重程度下限规则见 SKILL.md「风险评分」节。
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 import re
 
 
 class RiskScoringSystem:
-    """风险评分系统 — 含 8 维度评分和六维度综合"""
+    """风险评分系统 — 8 维度 1-5 分制 + 条款级评分 + 六维度综合"""
 
-    # 8 维度权重
+    # 8 维度（与 review_config.RADAR_DIMENSIONS 对齐，顺序固定）
+    DIMENSIONS = [
+        "合同效力与合规性", "价款与支付", "交付与验收", "违约责任",
+        "知识产权与保密", "合同解除与终止", "争议解决", "主体授权与担保",
+    ]
+
+    # 8 维度权重（合计 1.00）
     DIMENSION_WEIGHTS = {
         "合同效力与合规性": 0.25, "价款与支付": 0.15, "交付与验收": 0.15,
         "违约责任": 0.20, "知识产权与保密": 0.05, "合同解除与终止": 0.10,
         "争议解决": 0.05, "主体授权与担保": 0.05,
     }
 
+    # 评分标尺（1-5，5 为最高风险）
+    SCORE_SCALE = {
+        1: "条款完整且对我方有利",
+        2: "基本完整，轻微不利",
+        3: "约定不明或存在风险点",
+        4: "明显不利或重要条款缺失",
+        5: "效力风险或可能直接导致重大损失",
+    }
+
     def __init__(self):
-        self.weight_config = {
-            'commercial_risk': 0.3, 'legal_risk': 0.4, 'practical_risk': 0.3
-        }
         self.level_scores = {
             '致命风险': 100, '重要风险': 70, '一般风险': 40, '轻微瑕疵': 10
         }
 
-    def calculate_comprehensive_risk_score(self,
-                                           commercial_analysis: Dict,
-                                           legal_analysis: Dict,
-                                           practical_analysis: Dict) -> Dict:
+    # ============ 8 维度 1-5 分制（主路径） ============
+
+    def calculate_dimension_weighted_score(self, radar_data: Dict[str, float]) -> Dict:
         """
-        计算综合风险评分
+        基于 8 维度 1-5 分雷达数据计算加权综合评分。
 
         Args:
-            commercial_analysis: 商业维度分析结果
-            legal_analysis: 法律维度分析结果
-            practical_analysis: 实务维度分析结果
+            radar_data: {维度名: 1-5 分}，缺省维度按 1 分计
 
         Returns:
-            综合评分报告
+            comprehensive_score (1-5 加权均值), risk_grade (四级评定),
+            dimension_scores (各维度原始分 + 等级标签), 最高风险维度
         """
-        # 计算各维度评分
-        commercial_score = self._calculate_dimension_score(commercial_analysis)
-        legal_score = self._calculate_dimension_score(legal_analysis)
-        practical_score = self._calculate_dimension_score(practical_analysis)
+        dim_scores = {}
+        weighted_sum = 0.0
+        total_weight = 0.0
 
-        # 加权综合评分
-        comprehensive_score = (
-            commercial_score * self.weight_config['commercial_risk'] +
-            legal_score * self.weight_config['legal_risk'] +
-            practical_score * self.weight_config['practical_risk']
-        )
+        for dim in self.DIMENSIONS:
+            score = radar_data.get(dim, 1.0)
+            score = max(1.0, min(5.0, float(score)))
+            weight = self.DIMENSION_WEIGHTS.get(dim, 0.05)
+            dim_scores[dim] = {
+                "score": score,
+                "label": self._dimension_label(score),
+            }
+            weighted_sum += score * weight
+            total_weight += weight
 
-        # 确定风险等级
-        risk_level = self._determine_risk_level(comprehensive_score)
+        # 雷达数据可能含 8 维度之外的键，一并计入（权重取默认 0.05）
+        for dim, score in radar_data.items():
+            if dim not in dim_scores:
+                score = max(1.0, min(5.0, float(score)))
+                dim_scores[dim] = {"score": score, "label": self._dimension_label(score)}
+                weighted_sum += score * 0.05
+                total_weight += 0.05
 
-        # 生成建议
-        recommendations = self._generate_recommendations(
-            commercial_analysis, legal_analysis, practical_analysis
-        )
+        comprehensive = weighted_sum / total_weight if total_weight > 0 else 1.0
 
+        highest_dim = max(dim_scores, key=lambda d: dim_scores[d]["score"]) if dim_scores else ""
         return {
-            'comprehensive_score': round(comprehensive_score, 2),
-            'risk_level': risk_level,
-            'dimension_scores': {
-                'commercial': round(commercial_score, 2),
-                'legal': round(legal_score, 2),
-                'practical': round(practical_score, 2)
-            },
-            'risk_distribution': self._analyze_risk_distribution(
-                commercial_analysis, legal_analysis, practical_analysis
-            ),
-            'recommendations': recommendations,
-            'key_risks': self._identify_key_risks(
-                commercial_analysis, legal_analysis, practical_analysis
-            )
+            "comprehensive_score": round(comprehensive, 2),   # 1-5 分制
+            "risk_grade": self._grade(comprehensive),          # 四级综合评定
+            "dimension_scores": dim_scores,
+            "highest_risk_dimension": highest_dim,
+            "highest_score": dim_scores[highest_dim]["score"] if highest_dim else 1.0,
+            "deep_review_required": any(d["score"] >= 4 for d in dim_scores.values()),
         }
 
-    def _calculate_dimension_score(self, analysis: Dict) -> float:
-        """计算单维度评分"""
-        base_score = 50.0  # 基础分
+    @staticmethod
+    def _dimension_label(score: float) -> str:
+        """维度分值 → 等级标签（雷达图标注用）"""
+        if score >= 4:
+            return "严重"
+        if score >= 3:
+            return "关注"
+        if score >= 2:
+            return "一般"
+        return "良好"
 
-        # 根据风险数量调整评分
-        risks = analysis.get('risks', [])
-        for risk in risks:
-            level = risk.get('level', '一般风险')
-            score = self.level_scores.get(level, 40)
-            base_score += score * 0.3
+    @staticmethod
+    def _grade(avg: float) -> str:
+        """综合四级评定（1-5 分制）"""
+        if avg >= 4:
+            return "极高风险"
+        if avg >= 3:
+            return "高风险"
+        if avg >= 2:
+            return "中风险"
+        return "低风险"
 
-        # 根据发现数量调整评分(发现多说明审核仔细)
-        findings = len(analysis.get('findings', []))
-        base_score -= findings * 2
+    def apply_severity_floor(self,
+                             initial_scores: Dict[str, float],
+                             final_scores: Dict[str, float],
+                             downgrade_reasons: Optional[Dict[str, str]] = None) -> Dict:
+        """
+        跨阶段严重程度下限校验：下游阶段不得无声降级上游评级。
 
-        # 限制评分范围 0-100
-        return max(0, min(100, base_score))
+        Args:
+            initial_scores: 上游阶段（Step 1 初评）各维度分值
+            final_scores: 下游阶段（Step 6 逐条审核后）各维度分值
+            downgrade_reasons: 降级理由 {维度: 理由}，无理由的降级视为违规
 
-    def _determine_risk_level(self, score: float) -> str:
-        """根据评分确定风险等级"""
-        if score >= 80:
-            return '高风险'
-        elif score >= 60:
-            return '中等风险'
-        elif score >= 40:
-            return '低风险'
-        else:
-            return '极低风险'
+        Returns:
+            {passed, violations: [{dimension, from, to, reason}], adjusted_scores}
+        """
+        reasons = downgrade_reasons or {}
+        violations = []
+        adjusted = dict(final_scores)
 
-    def _analyze_risk_distribution(self, *analyses: Dict) -> Dict:
-        """分析风险分布"""
-        distribution = {
-            '致命风险': 0,
-            '重要风险': 0,
-            '一般风险': 0,
-            '轻微瑕疵': 0
-        }
-
-        for analysis in analyses:
-            for risk in analysis.get('risks', []):
-                level = risk.get('level', '一般风险')
-                if level in distribution:
-                    distribution[level] += 1
-
-        return distribution
-
-    def _identify_key_risks(self, *analyses: Dict) -> List[Dict]:
-        """识别关键风险(致命+重要)"""
-        key_risks = []
-
-        for analysis in analyses:
-            for risk in analysis.get('risks', []):
-                level = risk.get('level', '')
-                if level in ['致命风险', '重要风险']:
-                    key_risks.append({
-                        'dimension': analysis.get('dimension', '未知'),
-                        'type': risk.get('risk_type', '未知'),
-                        'description': risk.get('description', ''),
-                        'level': level,
-                        'suggestion': risk.get('suggestion', '')
+        for dim, init_score in initial_scores.items():
+            final_score = final_scores.get(dim, 1.0)
+            if final_score < init_score:
+                reason = reasons.get(dim, "").strip()
+                if not reason:
+                    violations.append({
+                        "dimension": dim,
+                        "from": init_score,
+                        "to": final_score,
+                        "reason": "",
+                        "action": "已恢复上游评级（无降级理由）",
+                    })
+                    adjusted[dim] = init_score  # 无声降级 → 恢复上游分值
+                else:
+                    violations.append({
+                        "dimension": dim,
+                        "from": init_score,
+                        "to": final_score,
+                        "reason": reason,
+                        "action": "降级已记录理由",
                     })
 
-        # 按风险等级排序
-        key_risks.sort(key=lambda x: self.level_scores.get(x['level'], 0), reverse=True)
+        return {
+            "passed": not any(v["reason"] == "" for v in violations),
+            "violations": violations,
+            "adjusted_scores": adjusted,
+        }
 
-        return key_risks
+    def generate_radar_chart_data(self, radar_data: Dict[str, float]) -> Dict:
+        """生成雷达图结构化数据（docx 图表与 HTML 报告共用）"""
+        labels = [d for d in self.DIMENSIONS if d in radar_data] + \
+                 [d for d in radar_data if d not in self.DIMENSIONS]
+        data = [radar_data.get(d, 1.0) for d in labels]
+        return {
+            "labels": labels,
+            "datasets": [{"label": "风险评分", "data": data}],
+            "max": 5,
+            "risk_levels": {d: self._dimension_label(radar_data.get(d, 1.0)) for d in labels},
+        }
 
-    def _generate_recommendations(self, *analyses: Dict) -> List[str]:
-        """生成综合建议"""
-        recommendations = []
-
-        for analysis in analyses:
-            dimension = analysis.get('dimension', '')
-            rating = analysis.get('rating', '')
-
-            # 根据维度和评级生成建议
-            if dimension == '商业维度':
-                if rating in ['较差', '差']:
-                    recommendations.append(
-                        f"⚠️ {dimension}: 商业风险较高,建议重新评估交易结构"
-                    )
-                elif rating == '中等':
-                    recommendations.append(
-                        f"ℹ️ {dimension}: 建议关注商业条款的合理性"
-                    )
-
-            elif dimension == '法律维度':
-                fatal_risks = [r for r in analysis.get('risks', []) if r.get('level') == '致命风险']
-                if fatal_risks:
-                    recommendations.append(
-                        f"🚨 {dimension}: 发现{len(fatal_risks)}个致命风险,必须修改"
-                    )
-
-            elif dimension == '实务维度':
-                vague_terms = any('模糊' in r.get('description', '') for r in analysis.get('risks', []))
-                if vague_terms:
-                    recommendations.append(
-                        f"💡 {dimension}: 建议明确模糊表述,提高可执行性"
-                    )
-
-        return recommendations
+    # ============ 条款级评分 ============
 
     def calculate_clause_risk_score(self,
                                     clause_text: str,
@@ -196,6 +186,11 @@ class RiskScoringSystem:
         """
         score = 0
         issues = []
+
+        # 检查0: 占位符空白（硬性规则——必备条款留空不得判合规）
+        if self._is_placeholder(clause_text):
+            score += 50
+            issues.append('条款内容为占位符/空白，必备条款缺失实质约定')
 
         # 检查1: 明确性
         if self._is_vague(clause_text):
@@ -233,6 +228,20 @@ class RiskScoringSystem:
             'issues': issues,
             'suggestion': self._generate_clause_suggestion(clause_type, issues)
         }
+
+    @staticmethod
+    def _is_placeholder(text: str) -> bool:
+        """检测占位符空白（必备条款留空）"""
+        stripped = text.strip()
+        placeholder_patterns = [
+            r'_{3,}',                    # 空白线 ____
+            r'【\s*】',                   # 空书名号占位
+            r'\[\s*(待填|待定|待确认|待补充)\s*\]',
+            r'（\s*(待填|待定|待确认|待补充)\s*）',
+            r'详见附件(?!.*[。；])',      # 裸"详见附件"无后续约定
+            r'^\s*(待填|待定|待确认|待补充|N/?A|TBD)\s*$',
+        ]
+        return any(re.search(p, stripped) for p in placeholder_patterns)
 
     def _is_vague(self, text: str) -> bool:
         """检查是否模糊"""
@@ -280,36 +289,14 @@ class RiskScoringSystem:
 
         base = suggestions.get(clause_type, '建议完善条款内容')
 
+        if '占位符' in str(issues):
+            base = '条款留空，必须在签署前填写完整；' + base
         if '模糊' in str(issues):
             base += '，避免使用模糊表述'
         if '不平衡' in str(issues):
             base += '，注意权利义务对等'
 
         return base
-
-
-    # ============ 8 维度加权评分 ============
-
-    def calculate_dimension_weighted_score(self, radar_data):
-        """基于 8 维度雷达数据计算加权综合评分"""
-        weighted_sum = 0
-        total_weight = 0
-        dim_scores = {}
-        for dim, score in radar_data.items():
-            weight = self.DIMENSION_WEIGHTS.get(dim, 0.05)
-            normalized = (score - 1) * 25
-            dim_scores[dim] = round(normalized, 1)
-            weighted_sum += normalized * weight
-            total_weight += weight
-        comprehensive = weighted_sum / total_weight if total_weight > 0 else 0
-        level = self._determine_risk_level(comprehensive)
-        return {
-            "comprehensive_score": round(comprehensive, 2),
-            "risk_level": level,
-            "dimension_scores": dim_scores,
-            "highest_risk_dimension": max(dim_scores, key=dim_scores.get) if dim_scores else "",
-            "highest_score": max(dim_scores.values()) if dim_scores else 0,
-        }
 
     # ============ 六维度综合 ============
 
@@ -328,78 +315,36 @@ class RiskScoringSystem:
                         composite[dim]["highest_severity"] = severity
         return composite
 
-    def generate_radar_chart_data(self, radar_data):
-        """生成雷达图结构化数据（供 docx 图表使用）"""
-        labels = list(radar_data.keys())
-        data = [radar_data.get(d, 1.0) for d in labels]
-        return {
-            "labels": labels,
-            "datasets": [{"label": "风险评分", "data": data}],
-            "max": 5,
-            "risk_levels": {d: "严重" if s >= 4 else ("关注" if s >= 3 else ("一般" if s >= 2 else "良好"))
-                          for d, s in radar_data.items()},
-        }
 
 if __name__ == '__main__':
-    # 测试代码
-    print("=== 智能风险评分系统测试 ===\n")
+    print("=== 智能风险评分系统测试（V4.0 · 8 维度 1-5 分制）===\n")
 
     scorer = RiskScoringSystem()
 
-    # 模拟分析结果
-    commercial = {
-        'dimension': '商业维度',
-        'rating': '中等',
-        'risks': [
-            {'level': '重要风险', 'risk_type': '市场地位', 'description': '处于弱势'}
-        ],
-        'findings': [{'category': '主体', 'content': 'A公司'}]
+    # 测试 8 维度评分
+    radar = {
+        "合同效力与合规性": 2, "价款与支付": 4, "交付与验收": 3,
+        "违约责任": 5, "知识产权与保密": 1, "合同解除与终止": 3,
+        "争议解决": 2, "主体授权与担保": 4,
     }
+    result = scorer.calculate_dimension_weighted_score(radar)
+    print(f"综合评分: {result['comprehensive_score']}/5")
+    print(f"综合评定: {result['risk_grade']}")
+    print(f"最高风险维度: {result['highest_risk_dimension']} ({result['highest_score']}分)")
+    print(f"需律师深度审阅: {'是' if result['deep_review_required'] else '否'}")
 
-    legal = {
-        'dimension': '法律维度',
-        'rating': '良好',
-        'risks': [
-            {'level': '致命风险', 'risk_type': '条款缺失', 'description': '缺少验收条款'}
-        ],
-        'findings': []
-    }
+    # 测试跨阶段严重程度下限
+    print("\n=== 严重程度下限校验 ===")
+    initial = {"违约责任": 5, "价款与支付": 4}
+    final = {"违约责任": 2, "价款与支付": 4}
+    floor = scorer.apply_severity_floor(initial, final, downgrade_reasons={})
+    print(f"通过: {floor['passed']}")
+    for v in floor["violations"]:
+        print(f"  {v['dimension']}: {v['from']}→{v['to']} ({v['action']})")
 
-    practical = {
-        'dimension': '实务维度',
-        'rating': '良好',
-        'risks': [
-            {'level': '一般风险', 'risk_type': '模糊表述', 'description': '使用"合理时间"'}
-        ],
-        'findings': []
-    }
-
-    # 测试综合评分
-    print("=== 综合风险评分 ===")
-    result = scorer.calculate_comprehensive_risk_score(commercial, legal, practical)
-    print(f"综合评分: {result['comprehensive_score']}")
-    print(f"风险等级: {result['risk_level']}")
-    print(f"\n各维度评分:")
-    for dim, score in result['dimension_scores'].items():
-        print(f"  {dim}: {score}")
-    print(f"\n风险分布:")
-    for level, count in result['risk_distribution'].items():
-        print(f"  {level}: {count}个")
-    print(f"\n关键风险:")
-    for risk in result['key_risks']:
-        print(f"  - [{risk['level']}] {risk['type']}: {risk['description']}")
-    print(f"\n建议:")
-    for rec in result['recommendations']:
-        print(f"  {rec}")
-
-    # 测试条款评分
-    print("\n\n=== 条款风险评分 ===")
-    clause_result = scorer.calculate_clause_risk_score(
-        "甲方应尽快交付产品。",
-        '履行',
-        '买卖合同'
-    )
-    print(f"条款评分: {clause_result['score']}")
-    print(f"风险等级: {clause_result['level']}")
-    print(f"问题: {clause_result['issues']}")
-    print(f"建议: {clause_result['suggestion']}")
+    # 测试占位符检测
+    print("\n=== 条款评分（占位符检测）===")
+    r1 = scorer.calculate_clause_risk_score("交付时间：____", '履行', '买卖合同')
+    print(f"空白条款: {r1['score']}分 {r1['level']} — {r1['issues']}")
+    r2 = scorer.calculate_clause_risk_score("甲方应于2026年3月1日前在甲方仓库交付100台设备。", '履行', '买卖合同')
+    print(f"正常条款: {r2['score']}分 {r2['level']}")

@@ -601,12 +601,11 @@ if __name__ == '__main__':
 
     from review_config import ReviewConfig
 
-    # 初始化
-    data_dir = '/Users/CS/Trae/Claude/.trae/skills/contract-review-pro/data'
-    methodology_file = '/Users/CS/Trae/Claude/合同审核方法论体系_完整版.md'
+    # 初始化（data_dir 指向 skill 自带 data/ 目录）
+    data_dir = str(Path(__file__).resolve().parent.parent / 'data')
     config = ReviewConfig('standard')
 
-    analyzer = ContractAnalyzer(data_dir, methodology_file, config)
+    analyzer = ContractAnalyzer(data_dir, None, config)
 
     # 测试1：分析合同类型
     print("=== 测试1: 分析合同类型 ===")

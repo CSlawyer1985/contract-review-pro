@@ -1,6 +1,7 @@
 """
-Contract Review Pro - 主入口 V3.0
-专业合同审核 Skill，支持工作区配置、7步工作流、终稿三件套
+Contract Review Pro - 主入口 V4.0
+专业合同审核 Skill：7步工作流、专项门禁、终稿三件套 + HTML 可视化报告
+完全自包含，零外部依赖
 """
 
 import sys
@@ -23,10 +24,11 @@ from sanguan_analysis import SanguanAnalysis
 from intelligent_scoring import RiskScoringSystem
 from revision_router import RevisionRouter
 from clause_extractor import ClauseExtractor
+from html_report_generator import HtmlReportGenerator
 
 
 class ContractReviewSession:
-    """7 步有状态审核会话（V3.0 新增）"""
+    """7 步有状态审核会话"""
 
     def __init__(self, contract_path: str, workspace_path: Optional[str] = None,
                  client_name: Optional[str] = None, depth: str = "standard"):
@@ -96,6 +98,7 @@ class ContractReviewSession:
                     risk["dual_review"] = dual
                     decision = router.determine_revision_method(risk.get("description", ""))
                     risk["revision_method"] = decision.method
+                    risk["revision_action"] = decision.action
                 all_risks.extend(risks)
 
         risk_report = risk_assessor.generate_risk_report(all_risks)
@@ -129,33 +132,50 @@ class ContractReviewSession:
                 items.append({"gate": gate_name, "issues": gate.get("missing", gate.get("items", []))})
         return items
 
-    def generate_outputs(self, results: Dict, user_context: Dict, output_dir: str) -> Dict[str, str]:
-        """生成终稿三件套"""
+    def generate_outputs(self, results: Dict, user_context: Dict, output_dir: str,
+                         html_report: bool = True) -> Dict[str, str]:
+        """生成终稿三件套 + 可选 HTML 可视化报告"""
         doc_gen = DocumentGenerator(output_dir)
         outputs = {}
+
+        # scoring 注入 risk_report（意见书风险总览与 HTML 报告共用）
+        risk_report = results.get("risk_report", {})
+        if results.get("scoring"):
+            risk_report["scoring"] = results["scoring"]
 
         # 法律意见书
         outputs["opinion"] = doc_gen.generate_legal_opinion_docx(
             self.contract_name, results.get("analysis", {}),
-            results.get("risk_report", {}), user_context,
+            risk_report, user_context,
             author=self.config.author
         )
 
         # 法律分析
         outputs["analysis_doc"] = doc_gen.generate_legal_analysis_docx(
             self.contract_name, results.get("analysis", {}),
-            results.get("risk_report", {})
+            risk_report
         )
 
         # 批注版合同
         if self.contract_path.exists():
             annotated = doc_gen.generate_annotated_contract_docx(
                 self.contract_name, str(self.contract_path),
-                results.get("risk_report", {}),
+                risk_report,
                 author=self.config.author, initials=self.config.initials
             )
             if annotated:
                 outputs["annotated"] = annotated
+
+        # HTML 可视化报告（可选第四件）
+        if html_report:
+            try:
+                outputs["html_report"] = HtmlReportGenerator().generate(
+                    self.contract_name, results.get("analysis", {}),
+                    risk_report, scoring=results.get("scoring"),
+                    user_context=user_context, output_dir=output_dir,
+                )
+            except Exception as e:
+                print(f"⚠️ HTML 报告生成失败（已跳过）: {e}")
 
         return outputs
 
@@ -184,7 +204,7 @@ class ContractReviewPro:
             client_config = ClientConfig.load_from_workspace(workspace_path, client_name)
         self.client_config = client_config
 
-        print(f"Contract Review Pro V3.0 | 输出: {self.output_dir}")
+        print(f"Contract Review Pro V4.0 | 输出: {self.output_dir}")
 
     def query_contract_type(self, contract_type: str) -> dict:
         """查询合同类型审核指引"""
@@ -228,8 +248,8 @@ class ContractReviewPro:
 
         risk_report = risk_assessor.generate_risk_report(all_risks)
 
-        # 生成文档
-        opinion_file = doc_generator.generate_legal_opinion(
+        # 生成文档（V4.0：意见书/法律分析为 docx；批注版需原始 docx 文件路径时生成）
+        opinion_file = doc_generator.generate_legal_opinion_docx(
             contract_name,
             analysis_result,
             risk_report,
@@ -237,21 +257,15 @@ class ContractReviewPro:
              'review_scope': config.config['focus'],
              'risk_levels': config.config['check_categories']}
         )
-
-        # 生成详细批注版合同
-        annotated_file = doc_generator.generate_detailed_annotated_contract(
-            contract_name,
-            contract_text,
-            analysis_result,
-            risk_report,
-            user_context
+        analysis_file = doc_generator.generate_legal_analysis_docx(
+            contract_name, analysis_result, risk_report
         )
 
         return {
             'analysis_result': analysis_result,
             'risk_report': risk_report,
             'opinion_file': opinion_file,
-            'annotated_file': annotated_file
+            'analysis_file': analysis_file
         }
 
     def get_supported_contract_types(self) -> list:
@@ -279,7 +293,7 @@ def review_with_workspace_config(contract_path: str, workspace_path: str,
                                  client_name: str = None, user_context: dict = None,
                                  depth: str = "standard", output_dir: str = None) -> Dict:
     """
-    使用工作区配置审核合同（V3.0 新入口）
+    使用工作区配置审核合同（工作区配置入口）
 
     Args:
         contract_path: 合同文件路径（.txt 或 .docx）
@@ -318,7 +332,7 @@ def review_with_workspace_config(contract_path: str, workspace_path: str,
 
 if __name__ == '__main__':
     # 测试代码
-    print("=== Contract Review Pro V3.0 测试 ===\n")
+    print("=== Contract Review Pro V4.0 测试 ===\n")
     
     # 获取支持的合同类型
     system = ContractReviewPro()
